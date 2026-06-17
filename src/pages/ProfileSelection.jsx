@@ -3,7 +3,9 @@ import { getProfiles, createProfile, deleteProfile } from '../store/masterDb';
 import { TIMEZONES } from '../store/dateUtils';
 import { getTranslation } from '../store/i18n';
 import { pullFromCloud } from '../store/cloudSync';
+import logger from '../store/logger';
 
+const MODULE = 'ProfileSelection';
 const AVATARS = ['👨‍💻', '👩‍💻', '🚀', '🧠', '🎓', '🎨', '💼'];
 
 export default function ProfileSelection({ onSelect }) {
@@ -19,40 +21,74 @@ export default function ProfileSelection({ onSelect }) {
   useEffect(() => { load(); }, []);
 
   async function load() {
-    const p = await getProfiles();
-    setProfiles(p);
+    logger.info(MODULE, 'Loading profiles');
+    try {
+      const p = await getProfiles();
+      setProfiles(p);
+      logger.success(MODULE, 'Profiles loaded', { count: p.length });
+    } catch (err) {
+      logger.error(MODULE, 'Failed to load profiles', err);
+    }
   }
 
   async function handleCreate() {
     if (!form.name.trim()) return;
-    const newProfile = await createProfile(form);
-    const updated = await getProfiles();
-    setProfiles(updated);
-    setCreating(false);
-    onSelect(updated.find(p => p.id === newProfile));
+    logger.info(MODULE, 'Creating profile', { name: form.name });
+    try {
+      const newProfileId = await createProfile(form);
+      if (!newProfileId) {
+        logger.error(MODULE, 'Profile creation returned no ID');
+        alert(tr('profile.createFailed', { defaultValue: 'Failed to create profile.' }));
+        return;
+      }
+      const updated = await getProfiles();
+      setProfiles(updated);
+      setCreating(false);
+      const selectedProfile = updated.find(p => p.id === newProfileId);
+      if (!selectedProfile) {
+        logger.error(MODULE, 'Created profile not found in list', { newProfileId });
+        alert(tr('profile.createFailed', { defaultValue: 'Failed to create profile.' }));
+        return;
+      }
+      logger.success(MODULE, 'Profile created', { id: newProfileId });
+      onSelect(selectedProfile);
+    } catch (err) {
+      logger.error(MODULE, 'Failed to create profile', err);
+      alert(err.message || 'Failed to create profile.');
+    }
   }
 
   async function handleDelete(e, id) {
     e.stopPropagation();
     if (confirm('Delete this profile and ALL its data? This cannot be undone!')) {
-      await deleteProfile(id);
-      load();
+      logger.info(MODULE, 'Deleting profile', { id });
+      try {
+        await deleteProfile(id);
+        logger.success(MODULE, 'Profile deleted', { id });
+        load();
+      } catch (err) {
+        logger.error(MODULE, 'Failed to delete profile', err);
+        alert(err.message || 'Failed to delete profile.');
+      }
     }
   }
 
   async function handleRestore() {
     if (!passcode) return;
-    setSyncStatus('Downloading data...');
+    setSyncStatus(tr('profile.restore.downloading'));
+    logger.info(MODULE, 'Restoring from cloud');
     try {
       await pullFromCloud(passcode);
-      setSyncStatus('Success! Reloading...');
+      setSyncStatus(tr('profile.restore.success'));
+      logger.success(MODULE, 'Restored from cloud');
       setTimeout(() => window.location.reload(), 1500);
     } catch (err) {
+      logger.error(MODULE, 'Failed to restore from cloud', err);
       setSyncStatus('Error: ' + err.message);
     }
   }
 
-  const t = (key) => getTranslation(lang, key);
+  const tr = (key, params) => getTranslation(lang, key, params);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg-main)', color: 'var(--text-primary)' }}>
@@ -69,7 +105,7 @@ export default function ProfileSelection({ onSelect }) {
 
       {!creating && !restoring ? (
         <div style={{ textAlign: 'center', width: '100%', maxWidth: '800px' }}>
-          <h2 style={{ fontSize: '1.8rem', fontWeight: 500, marginBottom: '40px' }}>{t('profile.title')}</h2>
+          <h2 style={{ fontSize: '1.8rem', fontWeight: 500, marginBottom: '40px' }}>{tr('profile.title')}</h2>
           
           <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '24px' }}>
             {profiles.map(p => (
@@ -96,23 +132,23 @@ export default function ProfileSelection({ onSelect }) {
               <div style={{ width: '120px', height: '120px', borderRadius: 'var(--radius-lg)', border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '3rem', color: 'var(--text-muted)' }}>
                 +
               </div>
-              <div style={{ fontSize: '1.1rem', fontWeight: 500, color: 'var(--text-secondary)' }}>{t('profile.add')}</div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 500, color: 'var(--text-secondary)' }}>{tr('profile.add')}</div>
             </div>
           </div>
           
           <div style={{ marginTop: '60px' }}>
             <button className="btn btn-ghost" onClick={() => setRestoring(true)}>
-              ☁️ Restore from Cloud
+              {tr('profile.restore')}
             </button>
           </div>
         </div>
       ) : restoring ? (
         <div className="card" style={{ width: '400px' }}>
           <div className="card-header">
-            <h3>☁️ Restore from Cloud</h3>
+            <h3>{tr('profile.restore')}</h3>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '16px' }}>
-            Enter your Cloud Passcode to download and restore your entire system to this device.
+            {tr('profile.restore.desc')}
           </p>
           <div className="form-group">
             <input className="input" type="password" placeholder="Passcode..." autoFocus
@@ -121,14 +157,14 @@ export default function ProfileSelection({ onSelect }) {
           </div>
           {syncStatus && <p style={{ fontSize: '0.85rem', color: syncStatus.includes('Error') ? 'var(--red)' : 'var(--green)' }}>{syncStatus}</p>}
           <div className="modal-actions" style={{ marginTop: '24px' }}>
-            <button className="btn" onClick={() => setRestoring(false)}>{t('common.cancel')}</button>
-            <button className="btn btn-primary" onClick={handleRestore} disabled={!passcode.trim()}>Download</button>
+            <button className="btn" onClick={() => setRestoring(false)}>{tr('common.cancel')}</button>
+            <button className="btn btn-primary" onClick={handleRestore} disabled={!passcode.trim()}>{tr('profile.restore.download')}</button>
           </div>
         </div>
       ) : (
         <div className="card" style={{ width: '400px' }}>
           <div className="card-header">
-            <h3>{t('profile.new')}</h3>
+            <h3>{tr('profile.new')}</h3>
           </div>
           
           <div className="form-group">
@@ -144,13 +180,13 @@ export default function ProfileSelection({ onSelect }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label">{t('profile.name')}</label>
+            <label className="form-label">{tr('profile.name')}</label>
             <input className="input" autoFocus value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
               onKeyDown={e => e.key === 'Enter' && handleCreate()} />
           </div>
 
           <div className="form-group">
-            <label className="form-label">{t('settings.profile.lang')}</label>
+            <label className="form-label">{tr('settings.profile.lang')}</label>
             <select className="select" value={form.language} onChange={e => setForm({ ...form, language: e.target.value })}>
               <option value="vi">Tiếng Việt</option>
               <option value="en">English</option>
@@ -158,15 +194,15 @@ export default function ProfileSelection({ onSelect }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label">{t('settings.profile.timezone')}</label>
+            <label className="form-label">{tr('settings.profile.timezone')}</label>
             <select className="select" value={form.timezone} onChange={e => setForm({ ...form, timezone: e.target.value })}>
               {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
             </select>
           </div>
 
           <div className="modal-actions" style={{ marginTop: '24px' }}>
-            <button className="btn" onClick={() => setCreating(false)}>{t('common.cancel')}</button>
-            <button className="btn btn-primary" onClick={handleCreate} disabled={!form.name.trim()}>{t('profile.start')}</button>
+            <button className="btn" onClick={() => setCreating(false)}>{tr('common.cancel')}</button>
+            <button className="btn btn-primary" onClick={handleCreate} disabled={!form.name.trim()}>{tr('profile.start')}</button>
           </div>
         </div>
       )}

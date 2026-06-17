@@ -1,13 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { globalSearch } from '../store/db';
 import { useAppContext } from '../AppContext';
+import logger from '../store/logger';
+
+const MODULE = 'SearchPage';
 
 export default function SearchPage({ navigate, searchQuery, setSearchQuery }) {
   const { t } = useAppContext();
   const [query, setQuery] = useState(searchQuery || '');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const inputRef = useRef(null);
+  const debounceRef = useRef(null);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -20,15 +25,30 @@ export default function SearchPage({ navigate, searchQuery, setSearchQuery }) {
   async function doSearch(q) {
     if (q.length < 2) { setResults([]); return; }
     setLoading(true);
-    const res = await globalSearch(q);
-    setResults(res);
-    setLoading(false);
+    setError(null);
+    logger.info(MODULE, 'Searching', { query: q });
+    try {
+      const res = await globalSearch(q);
+      setResults(res);
+      logger.success(MODULE, 'Search completed', { query: q, resultCount: res.length });
+    } catch (err) {
+      logger.error(MODULE, 'Search failed', err);
+      setError(err.message || 'Search failed');
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleChange(e) {
     const q = e.target.value;
     setQuery(q);
-    doSearch(q);
+
+    // Debounce search by 300ms
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      doSearch(q);
+    }, 300);
   }
 
   function handleClick(item) {
@@ -58,7 +78,13 @@ export default function SearchPage({ navigate, searchQuery, setSearchQuery }) {
 
       {loading && <p style={{ color: 'var(--text-muted)' }}>...</p>}
 
-      {query.length >= 2 && results.length === 0 && !loading && (
+      {error && (
+        <div style={{ padding: '12px', marginBottom: '16px', borderRadius: '4px', fontSize: '0.85rem', background: 'rgba(255, 118, 117, 0.1)', color: 'var(--red)' }}>
+          {error}
+        </div>
+      )}
+
+      {query.length >= 2 && results.length === 0 && !loading && !error && (
         <div className="empty-state">
           <div className="icon">🔍</div>
           <p>No results found for "{query}"</p>

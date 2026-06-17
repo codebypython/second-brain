@@ -2,13 +2,26 @@ import { useState, useEffect } from 'react';
 import { getDashboardStats } from '../store/db';
 import { useAppContext } from '../AppContext';
 import { getTodayStr } from '../store/dateUtils';
+import logger from '../store/logger';
+
+const MODULE = 'Sidebar';
 
 export default function Sidebar({ activePage, onNavigate }) {
   const { profile, t, timezone } = useAppContext();
   const [stats, setStats] = useState({});
 
   useEffect(() => {
-    const fetchStats = () => getDashboardStats(getTodayStr(timezone)).then(setStats);
+    const fetchStats = async () => {
+      try {
+        logger.info(MODULE, 'Fetching dashboard stats');
+        const result = await getDashboardStats(getTodayStr(timezone));
+        setStats(result);
+        logger.success(MODULE, 'Dashboard stats loaded', result);
+      } catch (err) {
+        logger.error(MODULE, 'Failed to fetch dashboard stats', err);
+        // Silently catch — keep previous stats, don't break the sidebar
+      }
+    };
     fetchStats();
     const interval = setInterval(fetchStats, 10000);
     return () => clearInterval(interval);
@@ -22,8 +35,15 @@ export default function Sidebar({ activePage, onNavigate }) {
     { section: 'Workspace', items: [
       { id: 'notes', icon: '📝', label: t('nav.notes'), badge: stats.notes },
       { id: 'tasks', icon: '✅', label: t('nav.tasks'), badge: stats.todoPending },
+      { id: 'pomodoro', icon: '⏱️', label: t('nav.pomodoro') },
       { id: 'calendar', icon: '📅', label: t('nav.calendar'), badge: stats.todayEvents },
-      { id: 'study', icon: '🎓', label: t('nav.study'), badge: stats.dueCards },
+      { id: 'courses', icon: '🎓', label: t('courses.title') },
+      { id: 'career', icon: '🏆', label: t('nav.career') },
+      { id: 'network', icon: '👥', label: t('nav.network') },
+      { id: 'selfActualization', icon: '🌟', label: t('nav.selfActualization') },
+      { id: 'expenses', icon: '💸', label: t('expenses.title') },
+      { id: 'health', icon: '💪', label: t('health.title') },
+      { id: 'study', icon: '📚', label: t('nav.study'), badge: stats.dueCards },
       { id: 'journal', icon: '📔', label: t('nav.journal') },
     ]},
     { section: 'System', items: [

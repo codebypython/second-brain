@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { exportAll, importAll } from '../store/db';
-import { updateProfile } from '../store/masterDb';
+import { updateProfile, deleteProfile } from '../store/masterDb';
 import { pushToCloud, pullFromCloud } from '../store/cloudSync';
 import { useAppContext } from '../AppContext';
 import { TIMEZONES } from '../store/dateUtils';
+import logger from '../store/logger';
+
+const MODULE = 'Settings';
 
 export default function Settings() {
   const { t, profile, setProfile } = useAppContext();
@@ -16,27 +19,41 @@ export default function Settings() {
 
   useEffect(() => {
     if (profile) {
-      setForm({ name: profile.name, language: profile.language, timezone: profile.timezone });
+      setForm({ name: profile.name, language: profile.language, timezone: profile.timezone, geminiApiKey: profile.geminiApiKey || '' });
     }
   }, [profile]);
 
   async function handleUpdateProfile() {
     if (!form.name.trim()) return;
-    await updateProfile(profile.id, form);
-    setProfile({ ...profile, ...form });
-    alert(t('settings.saved', { defaultValue: 'Settings saved!' }));
+    logger.info(MODULE, 'Updating profile', { profileId: profile.id, form });
+    try {
+      await updateProfile(profile.id, form);
+      setProfile({ ...profile, ...form });
+      logger.success(MODULE, 'Profile updated');
+      alert(t('settings.saved', { defaultValue: 'Settings saved!' }));
+    } catch (err) {
+      logger.error(MODULE, 'Failed to update profile', err);
+      alert(t('settings.saveFailed', { defaultValue: 'Failed to save settings: ' }) + err.message);
+    }
   }
 
   /* ── Local Backup ── */
   async function handleExport() {
-    const data = await exportAll();
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `second-brain-backup-${profile.name}-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    logger.info(MODULE, 'Exporting data');
+    try {
+      const data = await exportAll();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `second-brain-backup-${profile.name}-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      logger.success(MODULE, 'Data exported');
+    } catch (err) {
+      logger.error(MODULE, 'Failed to export data', err);
+      alert(t('settings.exportFailed', { defaultValue: 'Failed to export data: ' }) + err.message);
+    }
   }
 
   function handleImport(e) {
@@ -47,10 +64,13 @@ export default function Settings() {
       try {
         const data = JSON.parse(ev.target.result);
         if (!data.version) throw new Error('Invalid format');
+        logger.info(MODULE, 'Importing data');
         await importAll(data);
+        logger.success(MODULE, 'Data imported');
         alert(t('settings.importSuccess', { defaultValue: 'Data imported successfully! App will reload.' }));
         window.location.reload();
       } catch (err) {
+        logger.error(MODULE, 'Failed to import data', err);
         alert(t('settings.importFailed', { defaultValue: 'Failed to import data: ' }) + err.message);
       }
     };
@@ -65,10 +85,13 @@ export default function Settings() {
     }
     setSyncing(true);
     setSyncStatus({ type: '', msg: '' });
+    logger.info(MODULE, 'Pushing to cloud');
     try {
       await pushToCloud(passcode);
       setSyncStatus({ type: 'success', msg: t('settings.cloud.pushSuccess', { defaultValue: 'Successfully pushed to cloud!' }) });
+      logger.success(MODULE, 'Pushed to cloud');
     } catch (err) {
+      logger.error(MODULE, 'Failed to push to cloud', err);
       setSyncStatus({ type: 'error', msg: err.message });
     }
     setSyncing(false);
@@ -83,13 +106,30 @@ export default function Settings() {
     
     setSyncing(true);
     setSyncStatus({ type: '', msg: '' });
+    logger.info(MODULE, 'Pulling from cloud');
     try {
       const updatedAt = await pullFromCloud(passcode);
       setSyncStatus({ type: 'success', msg: t('settings.cloud.pullSuccess', { defaultValue: 'Successfully pulled data from cloud! Reloading...' }) });
+      logger.success(MODULE, 'Pulled from cloud', { updatedAt });
       setTimeout(() => window.location.reload(), 1500);
     } catch (err) {
+      logger.error(MODULE, 'Failed to pull from cloud', err);
       setSyncStatus({ type: 'error', msg: err.message });
       setSyncing(false);
+    }
+  }
+
+  /* ── Danger Zone: Delete Account ── */
+  async function handleDeleteAccount() {
+    if (!confirm(t('common.confirmDelete', { defaultValue: 'Are you sure you want to delete?' }))) return;
+    logger.info(MODULE, 'Deleting account', { profileId: profile.id });
+    try {
+      await deleteProfile(profile.id);
+      logger.success(MODULE, 'Account deleted', { profileId: profile.id });
+      setProfile(null);
+    } catch (err) {
+      logger.error(MODULE, 'Failed to delete account', err);
+      alert(t('settings.deleteFailed', { defaultValue: 'Failed to delete account: ' }) + err.message);
     }
   }
 
@@ -121,6 +161,10 @@ export default function Settings() {
             <select className="select" value={form.timezone} onChange={e => setForm({ ...form, timezone: e.target.value })}>
               {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
             </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Google Gemini API Key</label>
+            <input className="input" type="password" placeholder="AIzaSy..." value={form.geminiApiKey || ''} onChange={e => setForm({ ...form, geminiApiKey: e.target.value })} />
           </div>
           <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end', gap: '12px' }}>
             <button className="btn btn-primary" onClick={handleUpdateProfile}>{t('common.save')}</button>
@@ -177,6 +221,20 @@ export default function Settings() {
             </label>
           </div>
         </div>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="card" style={{ marginTop: '24px', borderColor: 'var(--red)', boxShadow: '0 0 10px rgba(255, 107, 107, 0.1)' }}>
+        <div className="card-header">
+          <h3>{t('settings.danger')}</h3>
+        </div>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '16px', fontSize: '0.85rem' }}>
+          {t('settings.danger.desc')}
+        </p>
+        <button className="btn" onClick={handleDeleteAccount}
+          style={{ background: 'rgba(255, 107, 107, 0.1)', color: 'var(--red)', borderColor: 'var(--red)' }}>
+          {t('settings.danger.btn')}
+        </button>
       </div>
     </div>
   );

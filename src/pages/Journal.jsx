@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { createJournal, getJournal, deleteJournal, getJournalRange } from '../store/db';
 import { useAppContext } from '../AppContext';
 import { getTodayStr, formatFullDate } from '../store/dateUtils';
+import logger from '../store/logger';
+
+const MODULE = 'Journal';
 
 const MOODS = [
   { id: 'great', emoji: '😄', label: 'Great' },
@@ -21,46 +24,75 @@ export default function Journal() {
   const [saved, setSaved] = useState(false);
   const [currentEntryId, setCurrentEntryId] = useState(null);
   const [history, setHistory] = useState([]);
+  const [error, setError] = useState(null);
 
   useEffect(() => { loadEntry(date); loadHistory(); }, [date, timezone]);
 
   async function loadEntry(d) {
-    const entry = await getJournal(d);
-    if (entry) {
-      setMood(entry.mood);
-      setContent(entry.content);
-      setCurrentEntryId(entry.id);
-    } else {
-      setMood('neutral');
-      setContent('');
-      setCurrentEntryId(null);
+    logger.info(MODULE, 'loadEntry', d);
+    try {
+      const entry = await getJournal(d);
+      if (entry) {
+        setMood(entry.mood);
+        setContent(entry.content);
+        setCurrentEntryId(entry.id);
+      } else {
+        setMood('neutral');
+        setContent('');
+        setCurrentEntryId(null);
+      }
+      setSaved(false);
+      logger.success(MODULE, 'loadEntry', entry ? 'entry found' : 'no entry');
+    } catch (err) {
+      logger.error(MODULE, 'loadEntry', err);
+      setError(t('common.error') || 'Failed to load journal entry.');
     }
-    setSaved(false);
   }
 
   async function loadHistory() {
-    const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-    const entries = await getJournalRange(from, todayStr);
-    setHistory(entries.sort((a, b) => b.date.localeCompare(a.date)));
+    logger.info(MODULE, 'loadHistory');
+    try {
+      const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      const entries = await getJournalRange(from, todayStr);
+      setHistory(entries.sort((a, b) => b.date.localeCompare(a.date)));
+      logger.success(MODULE, 'loadHistory', `${entries.length} entries`);
+    } catch (err) {
+      logger.error(MODULE, 'loadHistory', err);
+      setError(t('common.error') || 'Failed to load journal history.');
+    }
   }
 
   async function handleSave() {
-    await createJournal({ date, mood, content });
-    const entry = await getJournal(date);
-    if (entry) setCurrentEntryId(entry.id);
-    setSaved(true);
-    loadHistory();
-    setTimeout(() => setSaved(false), 2000);
+    logger.info(MODULE, 'handleSave', date);
+    try {
+      await createJournal({ date, mood, content });
+      const entry = await getJournal(date);
+      if (entry) setCurrentEntryId(entry.id);
+      setSaved(true);
+      loadHistory();
+      setTimeout(() => setSaved(false), 2000);
+      logger.success(MODULE, 'handleSave', date);
+    } catch (err) {
+      logger.error(MODULE, 'handleSave', err);
+      alert(t('common.error') || 'Failed to save journal entry. Please try again.');
+    }
   }
 
   async function handleDelete() {
     if (!currentEntryId) return;
     if (confirm(t('common.confirmDelete'))) {
-      await deleteJournal(currentEntryId);
-      setMood('neutral');
-      setContent('');
-      setCurrentEntryId(null);
-      loadHistory();
+      logger.info(MODULE, 'handleDelete', currentEntryId);
+      try {
+        await deleteJournal(currentEntryId);
+        setMood('neutral');
+        setContent('');
+        setCurrentEntryId(null);
+        loadHistory();
+        logger.success(MODULE, 'handleDelete', currentEntryId);
+      } catch (err) {
+        logger.error(MODULE, 'handleDelete', err);
+        alert(t('common.error') || 'Failed to delete journal entry. Please try again.');
+      }
     }
   }
 
@@ -72,6 +104,15 @@ export default function Journal() {
         <h2>{t('journal.title')}</h2>
         <p>{t('journal.desc')}</p>
       </div>
+
+      {error && (
+        <div className="empty-state" style={{ color: 'var(--red, #ff6b6b)' }}>
+          <p>⚠️ {error}</p>
+          <button className="btn btn-sm" onClick={() => { setError(null); loadEntry(date); loadHistory(); }} style={{ marginTop: '8px' }}>
+            {t('common.retry') || 'Retry'}
+          </button>
+        </div>
+      )}
 
       <div className="grid-2" style={{ gap: '24px' }}>
         <div>

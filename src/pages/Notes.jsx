@@ -2,9 +2,12 @@ import { useState, useEffect } from 'react';
 import { marked } from 'marked';
 import { getNotes, createNote, updateNote, deleteNote, searchNotes } from '../store/db';
 import { useAppContext } from '../AppContext';
+import logger from '../store/logger';
+
+const MODULE = 'Notes';
 
 export default function Notes() {
-  const { t } = useAppContext();
+  const { t, lang } = useAppContext();
   const CATEGORIES = [
     { id: 'projects', label: t('notes.cat.projects'), color: 'accent' },
     { id: 'areas', label: t('notes.cat.areas'), color: 'green' },
@@ -17,19 +20,39 @@ export default function Notes() {
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ title: '', content: '', category: 'resources', tags: '' });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => { load(); }, [filter]);
 
   async function load() {
-    const data = filter === 'all' ? await getNotes() : await getNotes({ category: filter });
-    setNotes(data);
+    logger.info(MODULE, 'load', { filter });
+    setLoading(true);
+    setError(null);
+    try {
+      const data = filter === 'all' ? await getNotes() : await getNotes({ category: filter });
+      setNotes(data);
+      logger.success(MODULE, 'load', { count: data.length });
+    } catch (err) {
+      logger.error(MODULE, 'load', err);
+      setError(err.message || 'Failed to load notes');
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleSearch(q) {
     setSearch(q);
     if (q.length > 1) {
-      const results = await searchNotes(q);
-      setNotes(results);
+      logger.info(MODULE, 'handleSearch', { query: q });
+      try {
+        const results = await searchNotes(q);
+        setNotes(results);
+        logger.success(MODULE, 'handleSearch', { count: results.length });
+      } catch (err) {
+        logger.error(MODULE, 'handleSearch', err);
+        setError(err.message || 'Search failed');
+      }
     } else {
       load();
     }
@@ -46,21 +69,36 @@ export default function Notes() {
   }
 
   async function handleSave() {
-    const tags = form.tags.split(',').map(t => t.trim()).filter(Boolean);
-    if (editing === 'new') {
-      await createNote({ ...form, tags });
-    } else {
-      await updateNote(editing.id, { ...form, tags });
+    logger.info(MODULE, 'handleSave', { mode: editing === 'new' ? 'create' : 'update' });
+    try {
+      // Renamed `t` → `tag` to avoid shadowing the translation function
+      const tags = form.tags.split(',').map(tag => tag.trim()).filter(Boolean);
+      if (editing === 'new') {
+        await createNote({ ...form, tags });
+      } else {
+        await updateNote(editing.id, { ...form, tags });
+      }
+      setEditing(null);
+      logger.success(MODULE, 'handleSave', { title: form.title });
+      load();
+    } catch (err) {
+      logger.error(MODULE, 'handleSave', err);
+      alert(err.message || 'Failed to save note');
     }
-    setEditing(null);
-    load();
   }
 
   async function handleDelete(id) {
     if (confirm(t('common.confirmDelete'))) {
-      await deleteNote(id);
-      setEditing(null);
-      load();
+      logger.info(MODULE, 'handleDelete', { id });
+      try {
+        await deleteNote(id);
+        setEditing(null);
+        logger.success(MODULE, 'handleDelete', { id });
+        load();
+      } catch (err) {
+        logger.error(MODULE, 'handleDelete', err);
+        alert(err.message || 'Failed to delete note');
+      }
     }
   }
 
@@ -91,12 +129,24 @@ export default function Notes() {
         <input placeholder={t('common.search')} value={search} onChange={e => handleSearch(e.target.value)} />
       </div>
 
-      {notes.length === 0 ? (
+      {error && (
+        <div className="empty-state">
+          <div className="icon">⚠️</div>
+          <p>{error}</p>
+          <button className="btn btn-primary" onClick={load}>{t('common.retry') || 'Retry'}</button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="empty-state">
+          <p>Loading...</p>
+        </div>
+      ) : !error && notes.length === 0 ? (
         <div className="empty-state">
           <div className="icon">📝</div>
           <p>{t('notes.empty')}</p>
         </div>
-      ) : (
+      ) : !error && (
         <div className="notes-grid">
           {notes.map(note => (
             <div key={note.id} className="note-card" onClick={() => openEdit(note)}>
@@ -106,7 +156,7 @@ export default function Notes() {
                 <span className={`tag tag-${CATEGORIES.find(c => c.id === note.category)?.color || 'accent'}`}>
                   {CATEGORIES.find(c => c.id === note.category)?.label.split(' ')[1] || note.category}
                 </span>
-                <span>{timeAgo(note.updatedAt, t)}</span>
+                <span>{timeAgo(note.updatedAt, lang)}</span>
               </div>
             </div>
           ))}
@@ -173,7 +223,12 @@ export default function Notes() {
   );
 }
 
-function timeAgo(dateStr, t) {
+/**
+ * Returns a human-readable relative time string for the given date.
+ * @param {string} dateStr - ISO date string
+ * @param {string} lang - locale string (e.g. 'vi-VN', 'en-US') for formatting fallback dates
+ */
+function timeAgo(dateStr, lang) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'just now';
@@ -182,5 +237,5 @@ function timeAgo(dateStr, t) {
   if (hrs < 24) return `${hrs}h`;
   const days = Math.floor(hrs / 24);
   if (days < 7) return `${days}d`;
-  return new Date(dateStr).toLocaleDateString('vi-VN');
+  return new Date(dateStr).toLocaleDateString(lang || 'en-US');
 }

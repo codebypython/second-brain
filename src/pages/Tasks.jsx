@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react';
 import { getTasks, createTask, updateTask, deleteTask, getProjects, createProject, updateProject, deleteProject } from '../store/db';
 import { useAppContext } from '../AppContext';
 import { getTodayStr } from '../store/dateUtils';
+import logger from '../store/logger';
 
-export default function Tasks() {
+const MODULE = 'Tasks';
+
+export default function Tasks({ navigate }) {
   const { t, timezone } = useAppContext();
   const today = getTodayStr(timezone);
 
@@ -15,16 +18,29 @@ export default function Tasks() {
   const [editProject, setEditProject] = useState(null);
   const [form, setForm] = useState({ title: '', project: '', priority: 'medium', dueDate: '', description: '' });
   const [projForm, setProjForm] = useState({ name: '', color: '#6c5ce7' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => { load(); }, [filter, projFilter]);
 
   async function load() {
-    const [tArr, p] = await Promise.all([getTasks({}), getProjects()]);
-    let filtered = tArr;
-    if (filter !== 'all') filtered = filtered.filter(x => x.status === filter);
-    if (projFilter) filtered = filtered.filter(x => x.project === projFilter);
-    setTasks(filtered);
-    setProjects(p);
+    logger.info(MODULE, 'Loading tasks and projects', { filter, projFilter });
+    setLoading(true);
+    setError(null);
+    try {
+      const [tArr, p] = await Promise.all([getTasks({}), getProjects()]);
+      let filtered = tArr;
+      if (filter !== 'all') filtered = filtered.filter(x => x.status === filter);
+      if (projFilter) filtered = filtered.filter(x => x.project === projFilter);
+      setTasks(filtered);
+      setProjects(p);
+      logger.success(MODULE, 'Loaded tasks and projects', { tasks: filtered.length, projects: p.length });
+    } catch (err) {
+      logger.error(MODULE, 'Failed to load tasks/projects', err);
+      setError('Failed to load tasks. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   function openNew() {
@@ -39,32 +55,62 @@ export default function Tasks() {
 
   async function handleSave() {
     if (!form.title.trim()) return;
-    if (editing === 'new') {
-      await createTask(form);
-    } else {
-      await updateTask(editing.id, form);
+    logger.info(MODULE, editing === 'new' ? 'Creating task' : 'Updating task', { title: form.title });
+    try {
+      if (editing === 'new') {
+        await createTask(form);
+        logger.success(MODULE, 'Task created', { title: form.title });
+      } else {
+        await updateTask(editing.id, form);
+        logger.success(MODULE, 'Task updated', { id: editing.id, title: form.title });
+      }
+      setEditing(null);
+      load();
+    } catch (err) {
+      logger.error(MODULE, 'Failed to save task', err);
+      alert('Failed to save task. Please try again.');
     }
-    setEditing(null);
-    load();
   }
 
   async function toggleDone(task) {
     const newStatus = task.status === 'done' ? 'todo' : 'done';
-    await updateTask(task.id, { status: newStatus });
-    load();
+    logger.info(MODULE, 'Toggling task status', { id: task.id, from: task.status, to: newStatus });
+    try {
+      await updateTask(task.id, { status: newStatus });
+      logger.success(MODULE, 'Task status toggled', { id: task.id, status: newStatus });
+      load();
+    } catch (err) {
+      logger.error(MODULE, 'Failed to toggle task status', err);
+      alert('Failed to update task status.');
+    }
   }
 
   async function cycleStatus(task) {
     const cycle = { todo: 'doing', doing: 'done', done: 'todo' };
-    await updateTask(task.id, { status: cycle[task.status] || 'todo' });
-    load();
+    const newStatus = cycle[task.status] || 'todo';
+    logger.info(MODULE, 'Cycling task status', { id: task.id, from: task.status, to: newStatus });
+    try {
+      await updateTask(task.id, { status: newStatus });
+      logger.success(MODULE, 'Task status cycled', { id: task.id, status: newStatus });
+      load();
+    } catch (err) {
+      logger.error(MODULE, 'Failed to cycle task status', err);
+      alert('Failed to update task status.');
+    }
   }
 
   async function handleDelete(id) {
     if (confirm(t('common.confirmDelete'))) {
-      await deleteTask(id);
-      setEditing(null);
-      load();
+      logger.info(MODULE, 'Deleting task', { id });
+      try {
+        await deleteTask(id);
+        logger.success(MODULE, 'Task deleted', { id });
+        setEditing(null);
+        load();
+      } catch (err) {
+        logger.error(MODULE, 'Failed to delete task', err);
+        alert('Failed to delete task. Please try again.');
+      }
     }
   }
 
@@ -78,25 +124,41 @@ export default function Tasks() {
   }
   async function handleSaveProject() {
     if (!projForm.name.trim()) return;
-    if (editProject === 'new') {
-      await createProject(projForm);
-    } else {
-      if (editProject.name !== projForm.name) {
-        const allTasks = await getTasks({});
-        for (const t of allTasks.filter(t => t.project === editProject.name)) {
-          await updateTask(t.id, { project: projForm.name });
+    logger.info(MODULE, editProject === 'new' ? 'Creating project' : 'Updating project', { name: projForm.name });
+    try {
+      if (editProject === 'new') {
+        await createProject(projForm);
+        logger.success(MODULE, 'Project created', { name: projForm.name });
+      } else {
+        if (editProject.name !== projForm.name) {
+          const allTasks = await getTasks({});
+          for (const taskItem of allTasks.filter(taskItem => taskItem.project === editProject.name)) {
+            await updateTask(taskItem.id, { project: projForm.name });
+          }
+          logger.info(MODULE, 'Renamed project in tasks', { from: editProject.name, to: projForm.name });
         }
+        await updateProject(editProject.id, projForm);
+        logger.success(MODULE, 'Project updated', { id: editProject.id, name: projForm.name });
       }
-      await updateProject(editProject.id, projForm);
+      setEditProject(null);
+      load();
+    } catch (err) {
+      logger.error(MODULE, 'Failed to save project', err);
+      alert('Failed to save project. Please try again.');
     }
-    setEditProject(null);
-    load();
   }
   async function handleDeleteProject(p) {
     if (confirm(t('common.confirmDelete'))) {
-      await deleteProject(p.id);
-      if (projFilter === p.name) setProjFilter('');
-      load();
+      logger.info(MODULE, 'Deleting project', { id: p.id, name: p.name });
+      try {
+        await deleteProject(p.id);
+        logger.success(MODULE, 'Project deleted', { id: p.id, name: p.name });
+        if (projFilter === p.name) setProjFilter('');
+        load();
+      } catch (err) {
+        logger.error(MODULE, 'Failed to delete project', err);
+        alert('Failed to delete project. Please try again.');
+      }
     }
   }
 
@@ -140,7 +202,18 @@ export default function Tasks() {
         </div>
       )}
 
-      {tasks.length === 0 ? (
+      {error && (
+        <div style={{ padding: '12px 16px', marginBottom: '16px', background: 'var(--red-bg, #ff6b6b22)', color: 'var(--red, #ff6b6b)', borderRadius: '8px', fontSize: '0.9rem' }}>
+          ⚠️ {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="empty-state">
+          <div className="icon">⏳</div>
+          <p>{t('common.loading') || 'Loading...'}</p>
+        </div>
+      ) : tasks.length === 0 ? (
         <div className="empty-state">
           <div className="icon">✅</div>
           <p>{t('tasks.empty')}</p>
@@ -173,6 +246,9 @@ export default function Tasks() {
             <span className={`priority-${task.priority}`} style={{ fontSize: '0.75rem', fontWeight: 600 }}>
               {task.priority === 'high' ? t('tasks.priority.high') : task.priority === 'medium' ? t('tasks.priority.medium') : t('tasks.priority.low')}
             </span>
+            {task.status !== 'done' && (
+              <button className="btn btn-ghost btn-sm" onClick={() => navigate('pomodoro', { params: { activeTaskId: task.id } })} title="Tập trung Pomodoro">⏱️</button>
+            )}
             <button className="btn btn-ghost btn-sm" onClick={() => cycleStatus(task)}>🔄</button>
             <button className="btn btn-ghost btn-sm" onClick={() => openEdit(task)}>✏️</button>
             <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(task.id)}>🗑️</button>

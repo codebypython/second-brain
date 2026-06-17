@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { getDecks, createDeck, updateDeck, deleteDeck, createFlashcard, updateFlashcard, deleteFlashcard, getDueCards, getAllCards, reviewCard } from '../store/db';
 import { useAppContext } from '../AppContext';
 import { getTodayStr } from '../store/dateUtils';
+import logger from '../store/logger';
+
+const MODULE = 'StudyHub';
 
 export default function StudyHub() {
   const { t, timezone } = useAppContext();
@@ -19,45 +22,79 @@ export default function StudyHub() {
   const [cardForm, setCardForm] = useState({ front: '', back: '' });
   const [allCards, setAllCards] = useState([]);
   const [sessionDone, setSessionDone] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => { loadDecks(); }, [timezone]);
 
   async function loadDecks() {
-    const d = await getDecks();
-    const withDue = await Promise.all(d.map(async deck => {
-      const due = await getDueCards(deck.id, today);
-      const all = await getAllCards(deck.id);
-      return { ...deck, dueCount: due.length, totalCards: all.length };
-    }));
-    setDecks(withDue);
+    logger.info(MODULE, 'loadDecks');
+    setLoading(true);
+    setError(null);
+    try {
+      const d = await getDecks();
+      const withDue = await Promise.all(d.map(async deck => {
+        const due = await getDueCards(deck.id, today);
+        const all = await getAllCards(deck.id);
+        return { ...deck, dueCount: due.length, totalCards: all.length };
+      }));
+      setDecks(withDue);
+      logger.success(MODULE, 'loadDecks', `${withDue.length} decks loaded`);
+    } catch (err) {
+      logger.error(MODULE, 'loadDecks', err);
+      setError(t('common.error') || 'Failed to load decks. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function startReview(deck) {
-    const due = await getDueCards(deck.id, today);
-    if (due.length === 0) { alert(t('study.caughtUp')); return; }
-    setCurrentDeck(deck);
-    setCards(due);
-    setCardIndex(0);
-    setFlipped(false);
-    setSessionDone(0);
-    setView('review');
+    logger.info(MODULE, 'startReview', deck.name);
+    try {
+      const due = await getDueCards(deck.id, today);
+      if (due.length === 0) { alert(t('study.caughtUp')); return; }
+      setCurrentDeck(deck);
+      setCards(due);
+      setCardIndex(0);
+      setFlipped(false);
+      setSessionDone(0);
+      setView('review');
+      logger.success(MODULE, 'startReview', `${due.length} due cards`);
+    } catch (err) {
+      logger.error(MODULE, 'startReview', err);
+      alert(t('common.error') || 'Failed to start review. Please try again.');
+    }
   }
 
   async function manageDeck(deck) {
-    setCurrentDeck(deck);
-    const all = await getAllCards(deck.id);
-    setAllCards(all);
-    setView('manage');
+    logger.info(MODULE, 'manageDeck', deck.name);
+    try {
+      setCurrentDeck(deck);
+      const deckCards = await getAllCards(deck.id);
+      setAllCards(deckCards);
+      setView('manage');
+      logger.success(MODULE, 'manageDeck', `${deckCards.length} cards`);
+    } catch (err) {
+      logger.error(MODULE, 'manageDeck', err);
+      alert(t('common.error') || 'Failed to load deck cards. Please try again.');
+    }
   }
 
   async function handleRate(quality) {
-    await reviewCard(cards[cardIndex].id, quality);
-    setSessionDone(s => s + 1);
-    if (cardIndex + 1 < cards.length) {
-      setCardIndex(i => i + 1);
-      setFlipped(false);
-    } else {
-      setView('done');
+    logger.info(MODULE, 'handleRate', `quality=${quality}`);
+    try {
+      await reviewCard(cards[cardIndex].id, quality);
+      setSessionDone(s => s + 1);
+      if (cardIndex + 1 < cards.length) {
+        setCardIndex(i => i + 1);
+        setFlipped(false);
+      } else {
+        setView('done');
+      }
+      logger.success(MODULE, 'handleRate', `rated card quality=${quality}`);
+    } catch (err) {
+      logger.error(MODULE, 'handleRate', err);
+      alert(t('common.error') || 'Failed to save review. Please try again.');
     }
   }
 
@@ -65,32 +102,64 @@ export default function StudyHub() {
   function openEditDeck(deck) { setDeckForm({ name: deck.name, category: deck.category || '' }); setEditDeck(deck); }
   async function handleSaveDeck() {
     if (!deckForm.name.trim()) return;
-    if (editDeck === 'new') { await createDeck(deckForm); }
-    else { await updateDeck(editDeck.id, deckForm); }
-    setEditDeck(null);
-    loadDecks();
+    logger.info(MODULE, 'handleSaveDeck', editDeck === 'new' ? 'creating' : 'updating');
+    try {
+      if (editDeck === 'new') { await createDeck(deckForm); }
+      else { await updateDeck(editDeck.id, deckForm); }
+      setEditDeck(null);
+      logger.success(MODULE, 'handleSaveDeck');
+      loadDecks();
+    } catch (err) {
+      logger.error(MODULE, 'handleSaveDeck', err);
+      alert(t('common.error') || 'Failed to save deck. Please try again.');
+    }
   }
   async function handleDeleteDeck(id) {
-    if (confirm(t('common.confirmDelete'))) { await deleteDeck(id); setEditDeck(null); loadDecks(); }
+    if (confirm(t('common.confirmDelete'))) {
+      logger.info(MODULE, 'handleDeleteDeck', id);
+      try {
+        await deleteDeck(id);
+        setEditDeck(null);
+        logger.success(MODULE, 'handleDeleteDeck', id);
+        loadDecks();
+      } catch (err) {
+        logger.error(MODULE, 'handleDeleteDeck', err);
+        alert(t('common.error') || 'Failed to delete deck. Please try again.');
+      }
+    }
   }
 
   function openNewCard() { setCardForm({ front: '', back: '' }); setEditCard('new'); }
   function openEditCard(card) { setCardForm({ front: card.front, back: card.back }); setEditCard(card); }
   async function handleSaveCard() {
     if (!cardForm.front.trim() || !cardForm.back.trim()) return;
-    if (editCard === 'new') { await createFlashcard({ deckId: currentDeck.id, ...cardForm }); }
-    else { await updateFlashcard(editCard.id, cardForm); }
-    setEditCard(null);
-    const all = await getAllCards(currentDeck.id);
-    setAllCards(all);
-    loadDecks();
+    logger.info(MODULE, 'handleSaveCard', editCard === 'new' ? 'creating' : 'updating');
+    try {
+      if (editCard === 'new') { await createFlashcard({ deckId: currentDeck.id, ...cardForm }); }
+      else { await updateFlashcard(editCard.id, cardForm); }
+      setEditCard(null);
+      const updatedCards = await getAllCards(currentDeck.id);
+      setAllCards(updatedCards);
+      logger.success(MODULE, 'handleSaveCard');
+      loadDecks();
+    } catch (err) {
+      logger.error(MODULE, 'handleSaveCard', err);
+      alert(t('common.error') || 'Failed to save card. Please try again.');
+    }
   }
   async function handleDeleteCard(id) {
     if (confirm(t('common.confirmDelete'))) {
-      await deleteFlashcard(id);
-      const all = await getAllCards(currentDeck.id);
-      setAllCards(all);
-      loadDecks();
+      logger.info(MODULE, 'handleDeleteCard', id);
+      try {
+        await deleteFlashcard(id);
+        const updatedCards = await getAllCards(currentDeck.id);
+        setAllCards(updatedCards);
+        logger.success(MODULE, 'handleDeleteCard', id);
+        loadDecks();
+      } catch (err) {
+        logger.error(MODULE, 'handleDeleteCard', err);
+        alert(t('common.error') || 'Failed to delete card. Please try again.');
+      }
     }
   }
 
@@ -223,7 +292,16 @@ export default function StudyHub() {
         <button className="btn btn-primary" onClick={openNewDeck}>{t('study.btn.deck')}</button>
       </div>
 
-      {decks.length === 0 ? (
+      {error && (
+        <div className="empty-state" style={{ color: 'var(--red, #ff6b6b)' }}>
+          <p>⚠️ {error}</p>
+          <button className="btn btn-sm" onClick={loadDecks} style={{ marginTop: '8px' }}>{t('common.retry') || 'Retry'}</button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="empty-state"><div className="icon">⏳</div><p>{t('common.loading') || 'Loading...'}</p></div>
+      ) : decks.length === 0 && !error ? (
         <div className="empty-state"><div className="icon">🎓</div><p>{t('study.empty')}</p></div>
       ) : (
         <div className="notes-grid">
