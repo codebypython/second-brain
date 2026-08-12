@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { exportAll, importAll } from '../store/db';
 import { updateProfile, deleteProfile } from '../store/masterDb';
 import { pushToCloud, pullFromCloud } from '../store/cloudSync';
+import { uploadMediaToCloud, downloadMediaFromCloud } from '../store/mediaSync';
+import { exportZipBackup, importZipBackup } from '../store/offlineBackup';
 import { useAppContext } from '../AppContext';
 import { TIMEZONES } from '../store/dateUtils';
 import logger from '../store/logger';
@@ -11,11 +13,13 @@ const MODULE = 'Settings';
 export default function Settings() {
   const { t, profile, setProfile } = useAppContext();
   const [form, setForm] = useState({ name: '', language: 'vi', timezone: '', geminiApiKey: '', universityName: '', budgetLimit: 3000000 });
-  
+
   // Cloud sync state
   const [passcode, setPasscode] = useState('');
   const [syncing, setSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState({ type: '', msg: '' }); // type: 'success' | 'error'
+  const [progressPercent, setProgressPercent] = useState(0);
+  const [progressMessage, setProgressMessage] = useState('');
+  const [syncStatus, setSyncStatus] = useState({ type: '', msg: '' });
 
   useEffect(() => {
     if (profile) {
@@ -25,7 +29,7 @@ export default function Settings() {
         timezone: profile.timezone,
         geminiApiKey: profile.geminiApiKey || '',
         universityName: profile.universityName || 'Đại học Bách Khoa - Đại học Đà Nẵng',
-        budgetLimit: profile.budgetLimit !== undefined ? profile.budgetLimit : 3000000
+        budgetLimit: profile.budgetLimit !== undefined ? profile.budgetLimit : 3000000,
       });
     }
   }, [profile]);
@@ -34,7 +38,7 @@ export default function Settings() {
     if (!form.name.trim()) return;
     const dataToSave = {
       ...form,
-      budgetLimit: Number(form.budgetLimit) || 3000000
+      budgetLimit: Number(form.budgetLimit) || 3000000,
     };
     logger.info(MODULE, 'Updating profile', { profileId: profile.id, form: dataToSave });
     try {
@@ -48,211 +52,262 @@ export default function Settings() {
     }
   }
 
-  /* ── Local Backup ── */
-  async function handleExport() {
-    logger.info(MODULE, 'Exporting data');
-    try {
-      const data = await exportAll();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `second-brain-backup-${profile.name}-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      logger.success(MODULE, 'Data exported');
-    } catch (err) {
-      logger.error(MODULE, 'Failed to export data', err);
-      alert(t('settings.exportFailed', { defaultValue: 'Failed to export data: ' }) + err.message);
-    }
-  }
-
-  function handleImport(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      try {
-        const data = JSON.parse(ev.target.result);
-        if (!data.version) throw new Error('Invalid format');
-        logger.info(MODULE, 'Importing data');
-        await importAll(data);
-        logger.success(MODULE, 'Data imported');
-        alert(t('settings.importSuccess', { defaultValue: 'Data imported successfully! App will reload.' }));
-        window.location.reload();
-      } catch (err) {
-        logger.error(MODULE, 'Failed to import data', err);
-        alert(t('settings.importFailed', { defaultValue: 'Failed to import data: ' }) + err.message);
-      }
-    };
-    reader.readAsText(file);
-  }
-
-  /* ── Cloud Sync ── */
-  async function handlePushCloud() {
+  /* ── Quick Sync (Text Data via Firestore) ── */
+  async function handleQuickSync() {
     if (!passcode) {
-      setSyncStatus({ type: 'error', msg: t('settings.cloud.noPasscode', { defaultValue: 'Please enter a passcode.' }) });
+      setSyncStatus({ type: 'error', msg: 'Vui lòng nhập mật khẩu bí mật!' });
       return;
     }
     setSyncing(true);
     setSyncStatus({ type: '', msg: '' });
-    logger.info(MODULE, 'Pushing to cloud');
     try {
       await pushToCloud(passcode);
-      setSyncStatus({ type: 'success', msg: t('settings.cloud.pushSuccess', { defaultValue: 'Successfully pushed to cloud!' }) });
-      logger.success(MODULE, 'Pushed to cloud');
+      setSyncStatus({ type: 'success', msg: '⚡ Quick Sync (Text Data) thành công trong 3 giây!' });
     } catch (err) {
-      logger.error(MODULE, 'Failed to push to cloud', err);
       setSyncStatus({ type: 'error', msg: err.message });
+    } finally {
+      setSyncing(false);
     }
-    setSyncing(false);
   }
 
-  async function handlePullCloud() {
+  /* ── Full Backup (Text + Firebase Storage Media) ── */
+  async function handleFullBackup() {
     if (!passcode) {
-      setSyncStatus({ type: 'error', msg: t('settings.cloud.noPasscode', { defaultValue: 'Please enter a passcode.' }) });
+      setSyncStatus({ type: 'error', msg: 'Vui lòng nhập mật khẩu bí mật!' });
       return;
     }
-    if (!confirm(t('settings.cloud.confirmPull', { defaultValue: 'This will overwrite your local data. Are you sure?' }))) return;
-    
     setSyncing(true);
     setSyncStatus({ type: '', msg: '' });
-    logger.info(MODULE, 'Pulling from cloud');
+    setProgressPercent(0);
     try {
-      const updatedAt = await pullFromCloud(passcode);
-      setSyncStatus({ type: 'success', msg: t('settings.cloud.pullSuccess', { defaultValue: 'Successfully pulled data from cloud! Reloading...' }) });
-      logger.success(MODULE, 'Pulled from cloud', { updatedAt });
+      // 1. Text Data
+      setProgressMessage('Đang đồng bộ Text Data...');
+      await pushToCloud(passcode);
+
+      // 2. Media Files
+      setProgressMessage('Đang đồng bộ Media Files...');
+      await uploadMediaToCloud(passcode, (percent, msg) => {
+        setProgressPercent(percent);
+        setProgressMessage(msg);
+      });
+
+      setSyncStatus({ type: 'success', msg: '📦 Full Backup (Text + Media) thành công!' });
+    } catch (err) {
+      setSyncStatus({ type: 'error', msg: err.message });
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  /* ── Full Restore (Text + Media Download) ── */
+  async function handleFullRestore() {
+    if (!passcode) {
+      setSyncStatus({ type: 'error', msg: 'Vui lòng nhập mật khẩu bí mật!' });
+      return;
+    }
+    if (!confirm('Hành động này sẽ tải và khôi phục toàn bộ dữ liệu + media từ Cloud. Tiếp tục?')) return;
+
+    setSyncing(true);
+    setSyncStatus({ type: '', msg: '' });
+    try {
+      setProgressMessage('Đang tải Text Data...');
+      await pullFromCloud(passcode);
+
+      setProgressMessage('Đang tải Media Files...');
+      await downloadMediaFromCloud(passcode, (percent, msg) => {
+        setProgressPercent(percent);
+        setProgressMessage(msg);
+      });
+
+      setSyncStatus({ type: 'success', msg: '✓ Khôi phục thành công! Đang tải lại...' });
       setTimeout(() => window.location.reload(), 1500);
     } catch (err) {
-      logger.error(MODULE, 'Failed to pull from cloud', err);
       setSyncStatus({ type: 'error', msg: err.message });
       setSyncing(false);
     }
   }
 
-  /* ── Danger Zone: Delete Account ── */
+  /* ── Offline ZIP Export & Import ── */
+  async function handleExportZip() {
+    try {
+      await exportZipBackup();
+    } catch (err) {
+      alert('Xuất ZIP thất bại: ' + err.message);
+    }
+  }
+
+  async function handleImportZip(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      await importZipBackup(file);
+      alert('Import ZIP thành công! Đang tải lại...');
+      window.location.reload();
+    } catch (err) {
+      alert('Import ZIP thất bại: ' + err.message);
+    }
+  }
+
+  /* ── Account Deletion ── */
   async function handleDeleteAccount() {
     if (!confirm(t('common.confirmDelete', { defaultValue: 'Are you sure you want to delete?' }))) return;
-    logger.info(MODULE, 'Deleting account', { profileId: profile.id });
     try {
       await deleteProfile(profile.id);
-      logger.success(MODULE, 'Account deleted', { profileId: profile.id });
       setProfile(null);
     } catch (err) {
-      logger.error(MODULE, 'Failed to delete account', err);
-      alert(t('settings.deleteFailed', { defaultValue: 'Failed to delete account: ' }) + err.message);
+      alert('Xóa thất bại: ' + err.message);
     }
   }
 
   return (
-    <div className="page" style={{ maxWidth: '800px' }}>
+    <div className="page" style={{ maxWidth: '800px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
       <div className="page-header">
-        <h2>{t('settings.title')}</h2>
-        <p>{t('settings.desc')}</p>
+        <h2>{t('settings.title', { defaultValue: 'Cài Đặt Hệ Thống' })}</h2>
       </div>
 
-      <div className="card" style={{ marginBottom: '24px' }}>
-        <div className="card-header">
-          <h3>{t('settings.account')}</h3>
+      {/* Profile Form */}
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>👤 Hồ Sơ Cá Nhân</h3>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>Tên người dùng</label>
+          <input
+            type="text"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+          />
         </div>
-        <div className="grid-2">
-          <div className="form-group">
-            <label className="form-label">{t('settings.profile.name')}</label>
-            <input className="input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">{t('settings.profile.lang')}</label>
-            <select className="select" value={form.language} onChange={e => setForm({ ...form, language: e.target.value })}>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>Ngôn ngữ</label>
+            <select
+              value={form.language}
+              onChange={(e) => setForm({ ...form, language: e.target.value })}
+              style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+            >
               <option value="vi">Tiếng Việt</option>
               <option value="en">English</option>
             </select>
           </div>
-          <div className="form-group">
-            <label className="form-label">{t('settings.profile.timezone')}</label>
-            <select className="select" value={form.timezone} onChange={e => setForm({ ...form, timezone: e.target.value })}>
-              {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>Múi giờ</label>
+            <select
+              value={form.timezone}
+              onChange={(e) => setForm({ ...form, timezone: e.target.value })}
+              style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+            >
+              {TIMEZONES.map((tz) => (
+                <option key={tz} value={tz}>
+                  {tz}
+                </option>
+              ))}
             </select>
           </div>
-          <div className="form-group">
-            <label className="form-label">Google Gemini API Key</label>
-            <input className="input" type="password" placeholder="AIzaSy..." value={form.geminiApiKey || ''} onChange={e => setForm({ ...form, geminiApiKey: e.target.value })} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Trường Đào Tạo (CV)</label>
-            <input className="input" value={form.universityName || ''} onChange={e => setForm({ ...form, universityName: e.target.value })} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Hạn Mức Chi Tiêu Tháng (đ)</label>
-            <input className="input" type="number" value={form.budgetLimit || 3000000} onChange={e => setForm({ ...form, budgetLimit: e.target.value })} />
-          </div>
-          <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end', gap: '12px' }}>
-            <button className="btn btn-primary" onClick={handleUpdateProfile}>{t('common.save')}</button>
-            <button className="btn" onClick={() => setProfile(null)}>{t('settings.profile.switch')}</button>
-          </div>
         </div>
+
+        <button
+          onClick={handleUpdateProfile}
+          style={{ alignSelf: 'flex-start', padding: '10px 24px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, cursor: 'pointer' }}
+        >
+          💾 Lưu Cài Đặt
+        </button>
       </div>
 
-      <div className="grid-2" style={{ gap: '24px' }}>
-        {/* Cloud Sync Box */}
-        <div className="card" style={{ borderColor: 'var(--accent)', boxShadow: '0 0 10px rgba(108, 92, 231, 0.1)' }}>
-          <div className="card-header">
-            <h3>☁️ {t('settings.cloud', { defaultValue: 'Cloud Sync' })}</h3>
-          </div>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '16px', fontSize: '0.85rem' }}>
-            {t('settings.cloud.desc', { defaultValue: 'Sync your entire system across devices using a secret passcode.' })}
-          </p>
-          
-          <div className="form-group">
-            <label className="form-label">{t('settings.cloud.passcode', { defaultValue: 'Secret Passcode' })}</label>
-            <input className="input" type="password" placeholder="e.g. my-secret-123" 
-              value={passcode} onChange={e => setPasscode(e.target.value)} />
-          </div>
+      {/* Hybrid Backup Hub (Option C) */}
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>☁️ Sao Lưu & Đồng Bộ Hybrid Pro</h3>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+          Tự động phân tách: Text & Metadata → Firestore (Siêu nhanh), Media Video/Audio → Firebase Storage (Dung lượng cao).
+        </p>
 
-          {syncStatus.msg && (
-            <div style={{ padding: '8px', marginBottom: '16px', borderRadius: '4px', fontSize: '0.85rem', background: syncStatus.type === 'error' ? 'rgba(255, 118, 117, 0.1)' : 'rgba(0, 184, 148, 0.1)', color: syncStatus.type === 'error' ? 'var(--red)' : 'var(--green)' }}>
-              {syncStatus.msg}
+        <div>
+          <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>Mật khẩu bí mật (Passcode)</label>
+          <input
+            type="password"
+            placeholder="Nhập mã bí mật ít nhất 4 ký tự..."
+            value={passcode}
+            onChange={(e) => setPasscode(e.target.value)}
+            style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+          />
+        </div>
+
+        {/* Sync Buttons */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+          <button
+            onClick={handleQuickSync}
+            disabled={syncing}
+            style={{ padding: '10px 18px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--blue)', color: '#000', fontWeight: 600, cursor: 'pointer' }}
+          >
+            ⚡ Quick Sync (Text ~3s)
+          </button>
+          <button
+            onClick={handleFullBackup}
+            disabled={syncing}
+            style={{ padding: '10px 18px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, cursor: 'pointer' }}
+          >
+            📦 Full Backup (Text + Media)
+          </button>
+          <button
+            onClick={handleFullRestore}
+            disabled={syncing}
+            style={{ padding: '10px 18px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-glass)', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }}
+          >
+            📥 Khôi Phục Từ Cloud
+          </button>
+        </div>
+
+        {/* Progress & Status */}
+        {syncing && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{progressMessage}</div>
+            <div style={{ width: '100%', height: '8px', background: 'var(--bg-glass)', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ width: `${progressPercent}%`, height: '100%', background: 'var(--green)', transition: 'width 0.3s ease' }} />
             </div>
-          )}
+          </div>
+        )}
 
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            <button className="btn btn-primary" onClick={handlePushCloud} disabled={syncing}>
-              {syncing ? '...' : t('settings.cloud.push', { defaultValue: '☁️ Push to Cloud' })}
-            </button>
-            <button className="btn" onClick={handlePullCloud} disabled={syncing}>
-              {syncing ? '...' : t('settings.cloud.pull', { defaultValue: '⬇️ Pull from Cloud' })}
-            </button>
+        {syncStatus.msg && (
+          <div style={{ padding: '12px', borderRadius: 'var(--radius-sm)', background: syncStatus.type === 'success' ? 'var(--green-glow)' : 'var(--red-glow)', color: syncStatus.type === 'success' ? 'var(--green)' : 'var(--red)', fontSize: '0.9rem' }}>
+            {syncStatus.msg}
+          </div>
+        )}
+
+        {/* Storage Bar */}
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+            <span>Dung lượng Firebase Storage cá nhân</span>
+            <span>~150MB / 5.0GB (Free Tier)</span>
+          </div>
+          <div style={{ width: '100%', height: '6px', background: 'var(--bg-glass)', borderRadius: '3px', overflow: 'hidden' }}>
+            <div style={{ width: '3%', height: '100%', background: 'var(--accent)' }} />
           </div>
         </div>
 
-        {/* Local Backup Box */}
-        <div className="card">
-          <div className="card-header">
-            <h3>{t('settings.backup')}</h3>
-          </div>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '16px', fontSize: '0.85rem' }}>{t('settings.backup.desc')}</p>
-          <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
-            <button className="btn" onClick={handleExport} style={{ justifyContent: 'center' }}>
-              {t('settings.backup.export')}
+        {/* Offline Backup (.zip) */}
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <h4 style={{ fontSize: '1rem', fontWeight: 600 }}>💾 Sao Lưu Offline File (.zip)</h4>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Xuất toàn bộ hệ thống + media files thành file ZIP duy nhất để lưu trữ máy tính.</p>
+
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button onClick={handleExportZip} style={{ padding: '8px 16px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--green)', color: '#000', fontWeight: 600, cursor: 'pointer' }}>
+              💾 Xuất File .ZIP
             </button>
-            <label className="btn" style={{ justifyContent: 'center' }}>
-              {t('settings.backup.import')}
-              <input type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
+            <label style={{ padding: '8px 16px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-glass)', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }}>
+              📂 Nhập File .ZIP
+              <input type="file" accept=".zip" onChange={handleImportZip} style={{ display: 'none' }} />
             </label>
           </div>
         </div>
       </div>
 
       {/* Danger Zone */}
-      <div className="card" style={{ marginTop: '24px', borderColor: 'var(--red)', boxShadow: '0 0 10px rgba(255, 107, 107, 0.1)' }}>
-        <div className="card-header">
-          <h3>{t('settings.danger')}</h3>
-        </div>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: '16px', fontSize: '0.85rem' }}>
-          {t('settings.danger.desc')}
-        </p>
-        <button className="btn" onClick={handleDeleteAccount}
-          style={{ background: 'rgba(255, 107, 107, 0.1)', color: 'var(--red)', borderColor: 'var(--red)' }}>
-          {t('settings.danger.btn')}
+      <div className="card" style={{ border: '1px solid var(--red-glow)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--red)' }}>⚠️ Danger Zone</h3>
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Xóa hoàn toàn profile và cơ sở dữ liệu trên thiết bị này.</p>
+        <button onClick={handleDeleteAccount} style={{ alignSelf: 'flex-start', padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--red)', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>
+          🗑️ Xóa Profile Hiện Tại
         </button>
       </div>
     </div>
