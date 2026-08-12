@@ -448,6 +448,7 @@ export default function Courses({ navigate }) {
     });
 
     const cumulativeGPA = calculateCumulativeGpa(courseList);
+    const totalCreditsForGpa = Object.values(activeCourses).reduce((sum, item) => sum + item.credits, 0);
     
     const totalEarnedCredits = courseList
       .filter(c => c.status === 'passed')

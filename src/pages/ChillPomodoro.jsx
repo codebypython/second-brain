@@ -16,7 +16,7 @@ import {
 } from '../store/db';
 
 export default function ChillPomodoro() {
-  const { pomoMode, setPomoMode, pomoIsRunning, setPomoIsRunning, pomoTimeLeft, setPomoTimeLeft, pomoTotalTime, pomoCompleted } = useApp();
+  const { pomoMode, setPomoMode, pomoIsRunning, setPomoIsRunning, pomoTimeLeft, setPomoTimeLeft, pomoTotalTime, pomoCompleted } = useAppContext();
 
   const [activeTab, setActiveTab] = useState('timer');
   const [animations, setAnimations] = useState([]);

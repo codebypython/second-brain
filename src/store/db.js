@@ -174,7 +174,10 @@ export function initDB(profileId) {
 }
 
 export function getDB() {
-  if (!currentDb) throw new Error("DB not initialized. Please select a profile first.");
+  if (!currentDb) {
+    logger.info('DB', 'getDB called before initDB, auto-initializing default profile');
+    return initDB('default');
+  }
   return currentDb;
 }
 
