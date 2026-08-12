@@ -226,12 +226,42 @@ Nếu bạn thích làm việc trên Terminal mà không cần mở trình duy�
    ```powershell
    vercel
    ```
-4. Khi muốn phát hành lên môi trường Production thực tế, chạy lệnh:
+4. Khi muốn phát hành phiên bản mới nhất lên môi trường Production thực tế ngay lập tức, chạy lệnh:
    ```powershell
    vercel --prod
    ```
 
 ---
+
+### 🚀 Hướng Dẫn Chi Tiết Thao Tác Cập Nhật Phiên Bản Mới Nhất Trên Vercel
+
+Dưới đây là **3 bước chuẩn hóa** giúp bạn luôn đảm bảo đường link Vercel đang chạy phiên bản ứng dụng mới nhất:
+
+#### Bước 1: Kiểm thử và Biên dịch Build ở máy local
+Trước khi đẩy phiên bản mới lên Vercel, hãy đảm bảo dự án không gặp lỗi biên dịch:
+```powershell
+# Chạy kiểm thử tự động (136+ tests)
+npm test
+
+# Kiểm tra biên dịch bản phát hành production
+npm run build
+```
+
+#### Bước 2: Đẩy code mới lên GitHub (Tự động Trigger Build trên Vercel)
+Nếu dự án Vercel của bạn được tạo bằng cách Import Repo GitHub, mỗi lần bạn `git push` lên nhánh `main`, Vercel sẽ **tự động tự trigger** một tiến trình build mới (Continuous Deployment - CD) và phát hành lên link thực tế sau 15-30 giây:
+```powershell
+git add .
+git commit -m "feat: cập nhật tính năng và giao diện mới nhất"
+git push origin main
+```
+
+#### Bước 3: Xác nhận & Kiểm tra kết quả Deploy trên Vercel
+1. Truy cập vào [Vercel Dashboard](https://vercel.com/dashboard).
+2. Chọn dự án **second-brain**.
+3. Tại tab **Deployments**, bạn sẽ thấy phiên bản mới nhất đang có nhãn `Building` hoặc `Ready` kèm theo tên commit tương ứng.
+4. Truy cập liên kết Production URL của bạn (ví dụ: `https://second-brain-app.vercel.app`):
+   - Nhấn `Ctrl + Shift + R` (hoặc `Cmd + Shift + R` trên Mac) để xóa cache trình duyệt và tải bản build mới nhất.
+   - Kiểm tra các tính năng mới (Pomodoro Pro, Lịch Trình Excel, Study Planner, Backup Hybrid) trên menu Sidebar.
 
 ### ⚙️ Lưu ý Cấu hình Kỹ thuật Quan trọng
 
