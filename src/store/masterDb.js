@@ -7,7 +7,7 @@ masterDb.version(1).stores({
   profiles: '++id, name, avatar, theme, language, timezone, createdAt, lastActiveAt'
 });
 
-export async function createProfile({ name, avatar, language = 'vi', timezone = Intl.DateTimeFormat().resolvedOptions().timeZone }) {
+export async function createProfile({ name, avatar, language = 'vi', timezone = Intl.DateTimeFormat().resolvedOptions().timeZone, universityName = 'Đại học Bách Khoa - Đại học Đà Nẵng', budgetLimit = 3000000 }) {
   logger.info('MasterDB', 'Creating profile', { name, language, timezone });
   try {
     if (!name || !name.trim()) {
@@ -19,6 +19,8 @@ export async function createProfile({ name, avatar, language = 'vi', timezone = 
       theme: 'dark',
       language,
       timezone,
+      universityName,
+      budgetLimit,
       createdAt: new Date().toISOString(),
       lastActiveAt: new Date().toISOString()
     });

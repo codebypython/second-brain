@@ -26,6 +26,10 @@ export const translations = {
     'nav.journal': 'Nhật ký',
     'nav.settings': 'Cài đặt',
     'nav.backup': 'Sao lưu',
+    'nav.courses': 'GPA & Học phần DUT',
+    'nav.expenses': 'Quản lý Chi tiêu',
+    'nav.health': 'Quản lý Sức khỏe',
+    'nav.selfActualization': 'Tự Phát Triển',
     
     // Dashboard
     'dash.morning': '☀️ Chào buổi sáng',
@@ -448,9 +452,46 @@ export const translations = {
     'self.brand.github.commits': 'Số Commits/Contributions mục tiêu',
     'self.brand.github.current': 'Thực tế đạt được',
     'self.brand.posts.title': '✍️ Tech Blog & Bài viết chia sẻ',
-    'self.brand.posts.add': '+ Ghi nhận bài đăng',
-    'self.brand.mentor.title': '🤝 Nhật ký Mentoring khóa dưới',
     'self.brand.mentor.add': '+ Log giờ mentoring',
+    
+    // Power Manager
+    'nav.power': 'Quản lý Điện năng',
+    'power.title': '⚡ Quản lý Điện năng & Thiết bị',
+    'power.desc': 'Theo dõi chi tiết công suất thiết bị, tính toán số kWh tiêu thụ hàng ngày, hàng tháng và quản lý hóa đơn tiền điện sinh động',
+    'power.tab.devices': 'Thiết bị sử dụng',
+    'power.tab.bills': 'Hóa đơn & Chỉ số',
+    'power.tab.stats': 'Thống kê chuyên sâu',
+    'power.btn.new': '⚡ Thêm thiết bị',
+    'power.btn.newBill': '📝 Ghi chỉ số/Hóa đơn',
+    'power.form.name': 'Tên thiết bị',
+    'power.form.power': 'Công suất (Watts)',
+    'power.form.quantity': 'Số lượng',
+    'power.form.hours': 'Giờ sử dụng/ngày',
+    'power.form.days': 'Ngày dùng/tháng',
+    'power.form.category': 'Phân loại',
+    'power.form.room': 'Phòng đặt thiết bị',
+    'power.cat.cooling': 'Làm mát ❄️',
+    'power.cat.kitchen': 'Thiết bị bếp 🍳',
+    'power.cat.entertainment': 'Giải trí 🎮',
+    'power.cat.study': 'Học tập/Làm việc 💻',
+    'power.cat.lighting': 'Chiếu sáng 💡',
+    'power.cat.appliances': 'Điện gia dụng 🧺',
+    'power.cat.other': 'Khác 🔌',
+    'power.room.living': 'Phòng khách 🛋️',
+    'power.room.bedroom': 'Phòng ngủ 🛏️',
+    'power.room.kitchen': 'Nhà bếp 🍳',
+    'power.room.study': 'Phòng làm việc 📖',
+    'power.room.other': 'Khác 🏠',
+    'power.stats.totalCapacity': 'Tổng công suất',
+    'power.stats.dailyKwh': 'Tiêu thụ hàng ngày',
+    'power.stats.monthlyKwh': 'Tiêu thụ hàng tháng',
+    'power.stats.dailyCost': 'Tiền điện ngày',
+    'power.stats.monthlyCost': 'Tiền điện tháng',
+    'power.tariff.title': 'Biểu giá áp dụng',
+    'power.tariff.flat': 'Giá cố định (VD: Phòng trọ)',
+    'power.tariff.evn': 'Giá bậc thang EVN sinh hoạt',
+    'power.tariff.rate': 'Đơn giá cố định (VND/kWh)',
+    'power.tariff.vat': 'Cộng thêm 10% VAT',
   },
   en: {
     // General
@@ -479,6 +520,10 @@ export const translations = {
     'nav.journal': 'Journal',
     'nav.settings': 'Settings',
     'nav.backup': 'Backup',
+    'nav.courses': 'GPA & Courses DUT',
+    'nav.expenses': 'Expense Tracker',
+    'nav.health': 'Health & Wellness',
+    'nav.selfActualization': 'Self-Development',
 
     // Dashboard
     'dash.morning': '☀️ Good Morning',
@@ -901,16 +946,54 @@ export const translations = {
     'self.brand.github.commits': 'Target Commits/Contributions',
     'self.brand.github.current': 'Actual Contributions',
     'self.brand.posts.title': '✍️ Tech Blogs & Shared Posts',
-    'self.brand.posts.add': '+ Record Post',
-    'self.brand.mentor.title': '🤝 Junior Mentoring Logs',
     'self.brand.mentor.add': '+ Log Mentoring Time',
+
+    // Power Manager
+    'nav.power': 'Electricity Manager',
+    'power.title': '⚡ Electricity & Device Manager',
+    'power.desc': 'Track device power specifications, calculate daily & monthly kWh usage, and manage electricity bills in-depth',
+    'power.tab.devices': 'Appliance List',
+    'power.tab.bills': 'Bills & Meter Readings',
+    'power.tab.stats': 'Detailed Analytics',
+    'power.btn.new': '⚡ Add Device',
+    'power.btn.newBill': '📝 Log Meter/Bill',
+    'power.form.name': 'Device Name',
+    'power.form.power': 'Power Rating (Watts)',
+    'power.form.quantity': 'Quantity',
+    'power.form.hours': 'Hours used per day',
+    'power.form.days': 'Days used per month',
+    'power.form.category': 'Category',
+    'power.form.room': 'Room Location',
+    'power.cat.cooling': 'Cooling ❄️',
+    'power.cat.kitchen': 'Kitchen 🍳',
+    'power.cat.entertainment': 'Entertainment 🎮',
+    'power.cat.study': 'Study & Work 💻',
+    'power.cat.lighting': 'Lighting 💡',
+    'power.cat.appliances': 'Home Appliances 🧺',
+    'power.cat.other': 'Other 🔌',
+    'power.room.living': 'Living Room 🛋️',
+    'power.room.bedroom': 'Bedroom 🛏️',
+    'power.room.kitchen': 'Kitchen 🍳',
+    'power.room.study': 'Study Room 📖',
+    'power.room.other': 'Other Location 🏠',
+    'power.stats.totalCapacity': 'Total Capacity',
+    'power.stats.dailyKwh': 'Daily Consumption',
+    'power.stats.monthlyKwh': 'Monthly Consumption',
+    'power.stats.dailyCost': 'Daily Cost',
+    'power.stats.monthlyCost': 'Monthly Cost',
+    'power.tariff.title': 'Tariff Rate Options',
+    'power.tariff.flat': 'Flat Rate (e.g. Student Rentals)',
+    'power.tariff.evn': 'EVN Tiered Tariff (Vietnamese Household)',
+    'power.tariff.rate': 'Flat Rate Price (VND/kWh)',
+    'power.tariff.vat': 'Include 10% VAT',
   }
 };
 
 export function getTranslation(lang, key, params = {}) {
+  const pObj = params || {};
   let text = translations[lang]?.[key] || translations['en']?.[key] || key;
-  Object.keys(params).forEach(p => {
-    text = text.replace(`{${p}}`, params[p]);
+  Object.keys(pObj).forEach(p => {
+    text = text.replace(`{${p}}`, pObj[p]);
   });
   return text;
 }

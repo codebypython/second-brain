@@ -7,83 +7,49 @@ import logger from '../store/logger';
 const MODULE = 'PomodoroTimer';
 
 export default function PomodoroTimer({ pageParams }) {
-  const { t, lang, timezone } = useAppContext();
-  
-  // Timer settings & states
-  const [mode, setMode] = useState('focus'); // 'focus', 'shortBreak', 'longBreak'
-  const [timeLeft, setTimeLeft] = useState(25 * 60);
-  const [totalTime, setTotalTime] = useState(25 * 60);
-  const [isRunning, setIsRunning] = useState(false);
+  const {
+    t, lang, timezone,
+    pomoMode,
+    pomoTimeLeft, pomoTotalTime,
+    pomoIsRunning, setPomoIsRunning,
+    pomoCourseId, setPomoCourseId,
+    pomoTaskId, setPomoTaskId,
+    pomoCompleted, setPomoCompleted,
+    switchPomoMode
+  } = useAppContext();
   
   // Database entities
   const [courses, setCourses] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [logs, setLogs] = useState([]);
   
-  // Linking session
-  const [selectedCourseId, setSelectedCourseId] = useState('');
-  const [selectedTaskId, setSelectedTaskId] = useState('');
-  
   // Save completion modal / panel
-  const [showCompletionForm, setShowCompletionForm] = useState(false);
+  const showCompletionForm = pomoCompleted;
   const [completedDuration, setCompletedDuration] = useState(0); // in minutes
   const [sessionNotes, setSessionNotes] = useState('');
-  
-  // References for timer interval and notification chime
-  const timerRef = useRef(null);
-  const audioCtxRef = useRef(null);
 
   // Handle quick launch pageParams passed from other modules (Courses / Tasks)
   useEffect(() => {
     if (pageParams?.activeCourseId) {
-      setSelectedCourseId(String(pageParams.activeCourseId));
-      setSelectedTaskId('');
+      setPomoCourseId(String(pageParams.activeCourseId));
+      setPomoTaskId('');
     } else if (pageParams?.activeTaskId) {
-      setSelectedTaskId(String(pageParams.activeTaskId));
-      setSelectedCourseId('');
+      setPomoTaskId(String(pageParams.activeTaskId));
+      setPomoCourseId('');
     }
   }, [pageParams]);
-
-  // Audio helper: play classic dual chime using Web Audio API
-  const playChime = () => {
-    try {
-      if (!audioCtxRef.current) {
-        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      const audioCtx = audioCtxRef.current;
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
-      
-      const playTone = (freq, startTime, duration) => {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, startTime);
-        
-        gain.gain.setValueAtTime(0, startTime);
-        gain.gain.linearRampToValueAtTime(0.3, startTime + 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration - 0.02);
-        
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start(startTime);
-        osc.stop(startTime + duration);
-      };
-      
-      const now = audioCtx.currentTime;
-      // Chime notes: E5 -> A5 (pleasant ascending tone)
-      playTone(659.25, now, 0.5);
-      playTone(880.00, now + 0.15, 0.7);
-    } catch (e) {
-      logger.error(MODULE, 'Web Audio playback failed', e);
-    }
-  };
 
   // Load courses, tasks, and recent pomodoro logs on mount
   useEffect(() => {
     loadDBData();
   }, []);
+
+  useEffect(() => {
+    if (pomoCompleted) {
+      const minutesFocused = Math.round(pomoTotalTime / 60);
+      setCompletedDuration(minutesFocused);
+    }
+  }, [pomoCompleted, pomoTotalTime]);
 
   async function loadDBData() {
     try {
@@ -103,67 +69,13 @@ export default function PomodoroTimer({ pageParams }) {
     }
   }
 
-  // Handle timer countdown
-  useEffect(() => {
-    if (isRunning) {
-      timerRef.current = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            // Timer expired!
-            clearInterval(timerRef.current);
-            setIsRunning(false);
-            handleTimerComplete();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    }
-    
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isRunning, mode]);
-
-  // Handle mode transitions
-  const switchMode = (newMode) => {
-    setIsRunning(false);
-    setMode(newMode);
-    let duration = 25 * 60;
-    if (newMode === 'shortBreak') duration = 5 * 60;
-    else if (newMode === 'longBreak') duration = 15 * 60;
-    
-    setTimeLeft(duration);
-    setTotalTime(duration);
-  };
-
-  // Triggered when countdown finishes
-  const handleTimerComplete = () => {
-    playChime();
-    
-    // If it was a Focus session, prompt the user to save it
-    if (mode === 'focus') {
-      const minutesFocused = Math.round(totalTime / 60);
-      setCompletedDuration(minutesFocused);
-      setShowCompletionForm(true);
-    } else {
-      alert(t('pomo.session.complete'));
-      // Reset back to focus mode automatically
-      switchMode('focus');
-    }
-  };
-
   // Save the logged session
   const handleSaveLog = async () => {
     try {
       const today = getTodayStr(timezone);
       const logData = {
-        courseId: selectedCourseId ? Number(selectedCourseId) : null,
-        taskId: selectedTaskId ? Number(selectedTaskId) : null,
+        courseId: pomoCourseId ? Number(pomoCourseId) : null,
+        taskId: pomoTaskId ? Number(pomoTaskId) : null,
         duration: completedDuration,
         date: today,
         notes: sessionNotes.trim()
@@ -173,14 +85,14 @@ export default function PomodoroTimer({ pageParams }) {
       await createPomodoroLog(logData);
       
       // Reset forms and modal
-      setShowCompletionForm(false);
+      setPomoCompleted(false);
       setSessionNotes('');
       // Reload logs to update list and charts
       const updatedLogs = await getPomodoroLogs();
       setLogs(updatedLogs);
       
       // Auto-switch to short break as a reward!
-      switchMode('shortBreak');
+      switchPomoMode('shortBreak');
     } catch (err) {
       logger.error(MODULE, 'Failed to save focus session', err);
       alert('Không thể lưu phiên tập trung: ' + err.message);
@@ -188,9 +100,9 @@ export default function PomodoroTimer({ pageParams }) {
   };
 
   const handleSkipSave = () => {
-    setShowCompletionForm(false);
+    setPomoCompleted(false);
     setSessionNotes('');
-    switchMode('shortBreak');
+    switchPomoMode('shortBreak');
   };
 
   // Helper formatting MM:SS
@@ -201,7 +113,7 @@ export default function PomodoroTimer({ pageParams }) {
   };
 
   // Circular progress math
-  const progressRatio = totalTime > 0 ? timeLeft / totalTime : 1;
+  const progressRatio = pomoTotalTime > 0 ? pomoTimeLeft / pomoTotalTime : 1;
   const strokeDashoffsetValue = 565.48 * (1 - progressRatio);
 
   // Statistics & History Math
@@ -288,20 +200,20 @@ export default function PomodoroTimer({ pageParams }) {
           {/* Mode Tabs */}
           <div className="tabs" style={{ background: 'var(--bg-input)', padding: '4px', borderRadius: 'var(--radius-md)' }}>
             <button 
-              className={`tab ${mode === 'focus' ? 'active' : ''}`} 
-              onClick={() => switchMode('focus')}
+              className={`tab ${pomoMode === 'focus' ? 'active' : ''}`} 
+              onClick={() => switchPomoMode('focus')}
             >
               🎯 {t('pomo.mode.focus')}
             </button>
             <button 
-              className={`tab ${mode === 'shortBreak' ? 'active' : ''}`} 
-              onClick={() => switchMode('shortBreak')}
+              className={`tab ${pomoMode === 'shortBreak' ? 'active' : ''}`} 
+              onClick={() => switchPomoMode('shortBreak')}
             >
               ☕ {t('pomo.mode.shortBreak')}
             </button>
             <button 
-              className={`tab ${mode === 'longBreak' ? 'active' : ''}`} 
-              onClick={() => switchMode('longBreak')}
+              className={`tab ${pomoMode === 'longBreak' ? 'active' : ''}`} 
+              onClick={() => switchPomoMode('longBreak')}
             >
               🌴 {t('pomo.mode.longBreak')}
             </button>
@@ -323,7 +235,7 @@ export default function PomodoroTimer({ pageParams }) {
                 cx="110"
                 cy="110"
                 r="90"
-                stroke={mode === 'focus' ? 'var(--accent)' : 'var(--green)'}
+                stroke={pomoMode === 'focus' ? 'var(--accent)' : 'var(--green)'}
                 strokeWidth="8"
                 fill="transparent"
                 strokeDasharray={565.48}
@@ -340,13 +252,13 @@ export default function PomodoroTimer({ pageParams }) {
                 fontSize: '2.8rem', 
                 fontWeight: 'bold', 
                 color: 'var(--text-primary)',
-                textShadow: mode === 'focus' ? '0 0 16px var(--accent-glow)' : '0 0 16px var(--green-glow)',
+                textShadow: pomoMode === 'focus' ? '0 0 16px var(--accent-glow)' : '0 0 16px var(--green-glow)',
                 letterSpacing: '1px'
               }}>
-                {formatTime(timeLeft)}
+                {formatTime(pomoTimeLeft)}
               </div>
               <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '4px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                {mode === 'focus' ? 'Tập trung' : 'Nghỉ ngơi'}
+                {pomoMode === 'focus' ? 'Tập trung' : 'Nghỉ ngơi'}
               </div>
             </div>
           </div>
@@ -354,16 +266,16 @@ export default function PomodoroTimer({ pageParams }) {
           {/* Control Buttons */}
           <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'center' }}>
             <button 
-              className={`btn ${isRunning ? 'btn-ghost' : 'btn-primary'}`} 
-              onClick={() => setIsRunning(!isRunning)}
-              style={{ flex: 1, maxWidth: '140px', padding: '10px 0', justifyContent: 'center', border: isRunning ? '1px solid var(--border-hover)' : 'none' }}
+              className={`btn ${pomoIsRunning ? 'btn-ghost' : 'btn-primary'}`} 
+              onClick={() => setPomoIsRunning(!pomoIsRunning)}
+              style={{ flex: 1, maxWidth: '140px', padding: '10px 0', justifyContent: 'center', border: pomoIsRunning ? '1px solid var(--border-hover)' : 'none' }}
             >
-              {isRunning ? t('pomo.btn.pause') : t('pomo.btn.start')}
+              {pomoIsRunning ? t('pomo.btn.pause') : t('pomo.btn.start')}
             </button>
             
             <button 
               className="btn" 
-              onClick={() => switchMode(mode)}
+              onClick={() => switchPomoMode(pomoMode)}
               style={{ padding: '10px 16px' }}
               title="Làm mới đồng hồ"
             >
@@ -372,16 +284,16 @@ export default function PomodoroTimer({ pageParams }) {
           </div>
 
           {/* Link Project Entities */}
-          {!isRunning && !showCompletionForm && (
+          {!pomoIsRunning && !showCompletionForm && (
             <div style={{ width: '100%', marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group" style={{ margin: 0 }}>
                 <label className="form-label" style={{ fontSize: '0.72rem' }}>🔗 {t('pomo.link.course')}</label>
                 <select 
                   className="select" 
-                  value={selectedCourseId} 
+                  value={pomoCourseId} 
                   onChange={e => {
-                    setSelectedCourseId(e.target.value);
-                    if (e.target.value) setSelectedTaskId(''); // Mutually exclusive for clarity
+                    setPomoCourseId(e.target.value);
+                    if (e.target.value) setPomoTaskId(''); // Mutually exclusive for clarity
                   }}
                   style={{ fontSize: '0.8rem', padding: '8px 12px' }}
                 >
@@ -396,10 +308,10 @@ export default function PomodoroTimer({ pageParams }) {
                 <label className="form-label" style={{ fontSize: '0.72rem' }}>🔗 {t('pomo.link.task')}</label>
                 <select 
                   className="select" 
-                  value={selectedTaskId} 
+                  value={pomoTaskId} 
                   onChange={e => {
-                    setSelectedTaskId(e.target.value);
-                    if (e.target.value) setSelectedCourseId(''); // Mutually exclusive
+                    setPomoTaskId(e.target.value);
+                    if (e.target.value) setPomoCourseId(''); // Mutually exclusive
                   }}
                   style={{ fontSize: '0.8rem', padding: '8px 12px' }}
                 >

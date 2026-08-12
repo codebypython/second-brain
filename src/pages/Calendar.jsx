@@ -144,7 +144,7 @@ export default function Calendar() {
   ];
 
   return (
-    <div className="page" style={{ display: 'flex', flexDirection: 'column', height: '100vh', padding: '24px 32px' }}>
+    <div className="page calendar-page">
       <div className="page-header" style={{ marginBottom: '16px' }}>
         <h2>{t('cal.title')}</h2>
         <p>{t('cal.desc')}</p>
@@ -175,9 +175,9 @@ export default function Calendar() {
         </div>
       )}
 
-      <div style={{ flex: 1, display: 'flex', gap: '24px', minHeight: 0 }}>
+      <div className="calendar-layout-container">
         {/* Main Calendar Area */}
-        <div className="card" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 0 }}>
+        <div className="calendar-main-area card">
           {loading && (
             <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
               ⏳ {t('common.loading') || 'Loading...'}
@@ -423,7 +423,7 @@ export default function Calendar() {
         </div>
 
         {/* Sidebar: Due Tasks */}
-        <div style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="calendar-tasks-sidebar">
           <div className="card" style={{ flex: 1, overflowY: 'auto' }}>
             <div className="card-header">
               <h3>{t('cal.dueTasks')}</h3>

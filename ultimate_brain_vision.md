@@ -66,6 +66,57 @@ graph TD
 | **Không có Automation** | Không workflow, không reminder, không integration |
 | **Không có Analytics** | Không báo cáo năng suất, không insight |
 
+### 1.4 Phân Tích Hoạt Động & Hạn Chế Thực Tế Qua Các Use Cases
+
+Để đánh giá tính thực tiễn của hệ thống hiện tại, dưới đây là phân tích chi tiết hoạt động thông qua 5 kịch bản sử dụng (Use Cases) điển hình của sinh viên và các khoảng trống (Gaps) so với nghiệp vụ thực tế:
+
+#### 1.4.1 Use Case 1: Quản lý Điểm & Tính GPA Tích lũy (DUT Standard)
+*   **Hoạt động hiện tại**:
+    *   Sinh viên nạp khung chương trình mẫu (cntt) hoặc tự nhập học phần thủ công.
+    *   Nhập điểm thành phần hệ 10; hệ thống tự tính điểm tổng kết hệ 10, quy đổi điểm chữ (`A, B, C, D, F`) và điểm hệ 4.
+    *   Tính GPA tích lũy lọc bỏ môn học lại (lấy điểm cao nhất) và mô phỏng điểm số kỳ tới (What-if).
+*   **Hạn chế so với nghiệp vụ thực tế**:
+    *   *Không xử lý học phần đặc biệt*: Các môn điều kiện (Giáo dục Thể chất, Quốc phòng) vẫn có tín chỉ nhưng thực tế không được tính vào điểm trung bình tích lũy để xếp hạng học tập tại DUT.
+    *   *Khung chương trình tĩnh*: Chưa tự động xử lý khi nhà trường thay đổi mã học phần hoặc các môn thay thế tương đương qua các khóa tuyển sinh khác nhau.
+    *   *Học lại và cải thiện*: Chưa phân biệt rõ môn học lại bắt buộc (do điểm F) và môn học cải thiện tự nguyện (điểm D, C muốn lên A, B), dẫn đến thiếu đề xuất thông minh về việc tối ưu học phí và thời gian.
+
+#### 1.4.2 Use Case 2: Quản lý Đồ án PBL (Làm việc nhóm)
+*   **Hoạt động hiện tại**:
+    *   Sinh viên nhập danh sách thành viên nhóm đồ án, gán vai trò.
+    *   Tạo danh sách công việc nhỏ, phân công nhiệm vụ và ghi chép nhật ký cuộc họp nhóm.
+*   **Hạn chế so với nghiệp vụ thực tế**:
+    *   *Không có tính năng cộng tác (Collaboration Gap)*: Mọi dữ liệu chỉ nằm trong IndexedDB trên máy của người tạo. Các thành viên khác trong nhóm không thể truy cập, xem tiến độ hay tự cập nhật trạng thái công việc của họ.
+    *   *Tách rời môi trường phát triển*: Đồ án CNTT luôn đi kèm repo Git (GitHub/GitLab), việc cập nhật trạng thái công việc hoàn toàn thủ công, chưa thể sync tự động theo commit hoặc Pull Request thực tế.
+    *   *Thiếu kênh thông báo*: Khi đến hạn deadline hoặc có thay đổi phân công, hệ thống không thể tự động bắn thông báo nhắc nhở qua Email, Discord hay Zalo.
+
+#### 1.4.3 Use Case 3: Quản lý Điện năng tiêu thụ (Power Hub)
+*   **Hoạt động hiện tại**:
+    *   Nhập công suất (W), số lượng, thời gian sử dụng hàng ngày của từng thiết bị để tính lượng kWh dự kiến hàng tháng.
+    *   Ghi chỉ số công tơ điện thực tế (Đầu - Cuối) để tính tiền điện theo 6 bậc sinh hoạt EVN hoặc giá cố định.
+    *   So sánh lượng tiêu thụ thực tế với ước tính thiết bị và đưa ra cảnh báo rò rỉ điện nếu chênh lệch > 20%.
+*   **Hạn chế so với nghiệp vụ thực tế**:
+    *   *Ước tính công suất tĩnh*: Giả định thiết bị chạy liên tục đúng công suất định mức. Thực tế, các thiết bị thông minh, thiết bị biến tần (Inverter) như tủ lạnh, điều hòa có công suất dao động cực lớn tùy thuộc nhiệt độ phòng và tần suất đóng mở.
+    *   *Nhập liệu thủ công*: Phải đợi đến cuối tháng chủ nhà chốt số điện mới có thể đối chiếu. Chưa hỗ trợ kết nối hoặc đọc chỉ số từ các ổ cắm thông minh (Smart Plug) hay công tơ điện tử qua API.
+    *   *Biểu giá phức tạp*: Chưa hỗ trợ các loại biểu giá điện theo giờ (Cao điểm, Bình thường, Thấp điểm) áp dụng cho hộ kinh doanh hoặc sản xuất.
+
+#### 1.4.4 Use Case 4: Quản lý Chi tiêu & Ngân sách (Expenses & Finance)
+*   **Hoạt động hiện tại**:
+    *   Sinh viên ghi chép các giao dịch thu/chi hàng ngày.
+    *   Đặt hạn mức chi tiêu tổng của tháng, nhận cảnh báo cam/đỏ khi chi tiêu đạt mức 80% hoặc 100% hạn mức.
+*   **Hạn chế so với nghiệp vụ thực tế**:
+    *   *Thiếu kiểm soát chi tiết*: Chỉ có hạn mức tổng (budgetLimit), không thể chia nhỏ ngân sách theo từng danh mục cụ thể (ví dụ: giới hạn ăn uống tối đa 2 triệu/tháng, mua sắm 500k/tháng).
+    *   *Không hỗ trợ giao dịch định kỳ*: Các chi phí cố định (Tiền phòng trọ, hóa đơn điện nước, tiền mạng, tiền lương làm thêm) phải nhập tay mỗi tháng, chưa hỗ trợ cơ chế tự động ghi nhận lặp lại.
+    *   *Quản lý tài khoản (Multi-wallet Gap)*: Dòng tiền thực tế của sinh viên thường phân bổ ở nhiều nơi (Ví MoMo, tài khoản ngân hàng, tiền mặt), hệ thống hiện tại gộp chung tất cả làm một dẫn đến khó đối chiếu số dư thực tế.
+
+#### 1.4.5 Use Case 5: Theo dõi Sức khỏe & Hiệu suất Pomodoro
+*   **Hoạt động hiện tại**:
+    *   Ghi nhận số giờ ngủ, lượng nước uống, bài tập thể thao, số bước chân hàng ngày.
+    *   Chạy đồng hồ Pomodoro tập trung học tập, liên kết với môn học hoặc công việc để ghi log năng suất.
+*   **Hạn chế so với nghiệp vụ thực tế**:
+    *   *Ghi nhận nhập liệu cồng kềnh*: Người dùng phải tự gõ thủ công số bước chân và giấc ngủ mỗi ngày dẫn đến tỷ lệ bỏ ghi chép cực kỳ cao sau vài ngày sử dụng. Chưa tích hợp kết nối API tự động từ Google Fit, Apple Health hay các thiết bị đeo thông minh.
+    *   *Rủi ro mất phiên Pomodoro*: Bộ đếm giờ chạy bằng Javascript trên tab trình duyệt client. Nếu tab bị ngủ đông (tab sleeping) hoặc trình duyệt di động bị khóa màn hình, timer sẽ bị lệch hoặc dừng lại hoàn toàn.
+    *   *Thiếu phân tích sâu*: Chưa phân tích được sự liên quan trực tiếp giữa chất lượng sức khỏe (giờ ngủ, nước uống) tới hiệu suất học tập (số phiên Pomodoro hoàn thành) để đưa ra khuyến nghị sinh hoạt khoa học.
+
 ---
 
 ## Phần 2: Tầm Nhìn "Ultimate Brain" — Enterprise Edition

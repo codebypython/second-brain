@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { getProfiles, updateLastActive } from './store/masterDb';
 import { initDB } from './store/db';
 import { getTranslation } from './store/i18n';
@@ -75,6 +75,94 @@ export function AppProvider({ children }) {
     );
   }
 
+  // Global Pomodoro Timer State
+  const [pomoMode, setPomoMode] = useState('focus');
+  const [pomoTimeLeft, setPomoTimeLeft] = useState(25 * 60);
+  const [pomoTotalTime, setPomoTotalTime] = useState(25 * 60);
+  const [pomoIsRunning, setPomoIsRunning] = useState(false);
+  const [pomoCourseId, setPomoCourseId] = useState('');
+  const [pomoTaskId, setPomoTaskId] = useState('');
+  const [pomoCompleted, setPomoCompleted] = useState(false);
+
+  const audioCtxRef = useRef(null);
+
+  const playChime = () => {
+    try {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const audioCtx = audioCtxRef.current;
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      const playTone = (freq, startTime, duration) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, startTime);
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(0.3, startTime + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration - 0.02);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+      };
+      const now = audioCtx.currentTime;
+      playTone(659.25, now, 0.5);
+      playTone(880.00, now + 0.15, 0.7);
+    } catch (e) {
+      logger.error('AppContext', 'Audio chime play failed', e);
+    }
+  };
+
+  const endTimeRef = useRef(null);
+
+  useEffect(() => {
+    let timer = null;
+    if (pomoIsRunning) {
+      endTimeRef.current = Date.now() + pomoTimeLeft * 1000;
+      
+      const tick = () => {
+        const remaining = Math.max(0, Math.round((endTimeRef.current - Date.now()) / 1000));
+        if (remaining <= 0) {
+          if (timer) clearInterval(timer);
+          setPomoIsRunning(false);
+          playChime();
+          setPomoCompleted(true);
+          setPomoTimeLeft(0);
+        } else {
+          setPomoTimeLeft(remaining);
+        }
+      };
+
+      timer = setInterval(tick, 250);
+
+      const handleVisibilityChange = () => {
+        if (!document.hidden && pomoIsRunning && endTimeRef.current) {
+          tick();
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      return () => {
+        if (timer) clearInterval(timer);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    }
+  }, [pomoIsRunning]);
+
+  const switchPomoMode = (newMode) => {
+    setPomoIsRunning(false);
+    setPomoCompleted(false);
+    setPomoMode(newMode);
+    let duration = 25 * 60;
+    if (newMode === 'shortBreak') duration = 5 * 60;
+    else if (newMode === 'longBreak') duration = 15 * 60;
+    setPomoTimeLeft(duration);
+    setPomoTotalTime(duration);
+  };
+
   return (
     <AppContext.Provider value={{
       profile, 
@@ -82,7 +170,22 @@ export function AppProvider({ children }) {
       t,
       timezone: profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
       lang: profile?.language || 'vi',
-      isLoading
+      isLoading,
+      pomoMode,
+      setPomoMode,
+      pomoTimeLeft,
+      setPomoTimeLeft,
+      pomoTotalTime,
+      setPomoTotalTime,
+      pomoIsRunning,
+      setPomoIsRunning,
+      pomoCourseId,
+      setPomoCourseId,
+      pomoTaskId,
+      setPomoTaskId,
+      pomoCompleted,
+      setPomoCompleted,
+      switchPomoMode
     }}>
       {children}
     </AppContext.Provider>

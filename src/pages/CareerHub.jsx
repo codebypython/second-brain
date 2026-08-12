@@ -548,7 +548,7 @@ export default function CareerHub() {
               {profile?.name || 'Họ và tên Sinh viên'}
             </h2>
             <p style={{ fontStyle: 'italic', color: 'var(--text-secondary)', marginTop: '6px', fontSize: '0.95rem' }}>
-              Sinh viên ngành Công nghệ Thông tin - Đại học Bách Khoa Đà Nẵng (DUT)
+              Sinh viên ngành Công nghệ Thông tin - {profile?.universityName || 'Đại học Bách Khoa - Đại học Đà Nẵng'}
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '12px', fontSize: '0.85rem', color: 'var(--text-secondary)', fontFamily: 'sans-serif' }}>
               <span>✉️ {profile?.email || 'email@example.com'}</span>
@@ -567,7 +567,7 @@ export default function CareerHub() {
               <div style={{ display: 'flex', gap: '30px', fontSize: '0.9rem', color: 'var(--text-primary)' }}>
                 <div>GPA Tích lũy: <strong style={{ color: 'var(--accent-light)' }}>{academicStats.gpa.toFixed(2)} / 4.00</strong></div>
                 <div>Tín chỉ đã tích lũy: <strong style={{ color: 'var(--green)' }}>{academicStats.credits} TC</strong></div>
-                <div>Trường đào tạo: <strong>Đại học Bách Khoa - Đại học Đà Nẵng</strong></div>
+                <div>Trường đào tạo: <strong>{profile?.universityName || 'Đại học Bách Khoa - Đại học Đà Nẵng'}</strong></div>
               </div>
             </div>
 

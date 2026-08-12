@@ -7,7 +7,7 @@ import logger from '../store/logger';
 const MODULE = 'Dashboard';
 
 export default function Dashboard({ navigate }) {
-  const { t, timezone, lang } = useAppContext();
+  const { t, timezone, lang, profile } = useAppContext();
   const [stats, setStats] = useState(null);
   const [recentTasks, setRecentTasks] = useState([]);
   const [todayEvents, setTodayEvents] = useState([]);
@@ -106,7 +106,7 @@ export default function Dashboard({ navigate }) {
           </div>
           <div className="stat-label">Chi tiêu tháng này</div>
           <div style={{ width: '100%', background: 'rgba(255,255,255,0.05)', height: '4px', borderRadius: '2px', marginTop: '6px', overflow: 'hidden' }}>
-            <div style={{ width: `${Math.min(100, ((stats.thisMonthExpenses || 0) / (stats.budget || 3000000)) * 100)}%`, background: 'var(--red)', height: '100%' }} />
+            <div style={{ width: `${Math.min(100, ((stats.thisMonthExpenses || 0) / (profile.budgetLimit || 3000000)) * 100)}%`, background: 'var(--red)', height: '100%' }} />
           </div>
         </div>
         {stats.overdue > 0 && (

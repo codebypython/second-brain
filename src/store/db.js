@@ -1,11 +1,12 @@
 import Dexie from 'dexie';
 import logger from './logger';
+import { calculateCumulativeGpa } from './gpaUtils';
 
 let currentDb = null;
 
 export function initDB(profileId) {
   logger.info('DB', `initDB called for profile: ${profileId}`);
-  if (currentDb && currentDb.name === `SecondBrainDB_${profileId}`) {
+  if (currentDb && currentDb.name === `SecondBrainDB_${profileId}` && currentDb.isOpen()) {
     logger.info('DB', 'DB already initialized for this profile, reusing');
     return currentDb;
   }
@@ -97,6 +98,34 @@ export function initDB(profileId) {
     research_ideas: '++id, title, category, status, createdAt',
     branding_posts: '++id, title, platform, status, date',
     mentor_logs: '++id, menteeName, date, createdAt'
+  });
+
+  db.version(7).stores({
+    notes: '++id, title, category, area, tags, createdAt, updatedAt, pinned, courseId',
+    tasks: '++id, title, status, priority, project, dueDate, createdAt, completedAt, courseId',
+    flashcards: '++id, deckId, front, back, nextReview, interval, ease, repetitions',
+    decks: '++id, name, category, createdAt',
+    journal: '++id, date, mood, content, createdAt',
+    projects: '++id, name, status, color, createdAt',
+    events: '++id, title, date, startTime, endTime, color, category, description, repeat, completed, createdAt',
+    courses: '++id, name, code, credits, type, semester, status, gradeLetter, score10, score4, lecturer, room, schedule, notes, createdAt, updatedAt',
+    expenses: '++id, amount, category, date, description, type, createdAt',
+    health: '++id, date, sleepHours, sleepQuality, weight, bmi, steps, waterIntake, workoutType, workoutDuration, workoutIntensity, notes, createdAt, updatedAt',
+    pomodoro_logs: '++id, courseId, taskId, duration, date, notes',
+    skills: '++id, careerPath, skillName, rating, updatedAt',
+    portfolios: '++id, name, techStack, description, githubUrl, demoUrl, imagePath, createdAt',
+    certificates: '++id, name, issuer, issueDate, credentialId, type, createdAt',
+    networking: '++id, type, name, contact, expertise, notes, createdAt',
+    side_projects: '++id, name, status, description, githubUrl, createdAt',
+    books: '++id, title, author, category, status, rating, createdAt',
+    language_goals: '++id, language, examDate',
+    language_logs: '++id, type, date',
+    research_papers: '++id, title, category, status, createdAt',
+    research_ideas: '++id, title, category, status, createdAt',
+    branding_posts: '++id, title, platform, status, date',
+    mentor_logs: '++id, menteeName, date, createdAt',
+    power_devices: '++id, name, power, quantity, hoursPerDay, daysPerMonth, category, room, createdAt, updatedAt',
+    electricity_bills: '++id, month, startIndex, endIndex, totalKwh, totalAmount, paid, note, createdAt'
   });
 
   currentDb = db;
@@ -668,27 +697,7 @@ export async function getDashboardStats(todayStr) {
     try {
       if (db.courses) {
         const courses = await db.courses.toArray();
-        const activeCourses = {};
-        
-        courses.forEach(c => {
-          if (c.status === 'passed' || c.status === 'failed') {
-            const grade4 = c.score4 !== null ? c.score4 : 0.0;
-            const existing = activeCourses[c.code || c.name];
-            // Re-taking logic: take the highest grade
-            if (!existing || grade4 > existing.score4) {
-              activeCourses[c.code || c.name] = { credits: c.credits || 0, score4: grade4 };
-            }
-          }
-        });
-        
-        let totalWeighted = 0;
-        let totalCredits = 0;
-        Object.values(activeCourses).forEach(item => {
-          totalWeighted += item.score4 * item.credits;
-          totalCredits += item.credits;
-        });
-        
-        gpa = totalCredits > 0 ? Math.round((totalWeighted / totalCredits) * 100) / 100 : 0.00;
+        gpa = calculateCumulativeGpa(courses);
         credits = courses
           .filter(c => c.status === 'passed')
           .reduce((sum, c) => sum + (c.credits || 0), 0);
@@ -773,7 +782,7 @@ export async function exportAll() {
   logger.info('Export', 'Exporting all data');
   try {
     const db = getDB();
-    const [notes, tasks, flashcards, decks, journal, projects, events, courses, expenses, health, pomodoroLogs, skills, portfolios, certificates, networking, sideProjects, books, languageGoals, languageLogs, researchPapers, researchIdeas, brandingPosts, mentorLogs] = await Promise.all([
+    const [notes, tasks, flashcards, decks, journal, projects, events, courses, expenses, health, pomodoroLogs, skills, portfolios, certificates, networking, sideProjects, books, languageGoals, languageLogs, researchPapers, researchIdeas, brandingPosts, mentorLogs, powerDevices, electricityBills] = await Promise.all([
       db.notes.toArray(), db.tasks.toArray(), db.flashcards.toArray(),
       db.decks.toArray(), db.journal.toArray(), db.projects.toArray(), db.events.toArray(),
       db.courses ? db.courses.toArray() : Promise.resolve([]),
@@ -792,18 +801,22 @@ export async function exportAll() {
       db.research_ideas ? db.research_ideas.toArray() : Promise.resolve([]),
       db.branding_posts ? db.branding_posts.toArray() : Promise.resolve([]),
       db.mentor_logs ? db.mentor_logs.toArray() : Promise.resolve([]),
+      db.power_devices ? db.power_devices.toArray() : Promise.resolve([]),
+      db.electricity_bills ? db.electricity_bills.toArray() : Promise.resolve([]),
     ]);
     const data = { 
-      version: 6, 
+      version: 7, 
       exportedAt: new Date().toISOString(), 
       notes, tasks, flashcards, decks, journal, projects, events, courses, expenses, health, 
       pomodoro_logs: pomodoroLogs,
       skills, portfolios, certificates, networking, side_projects: sideProjects,
       books, language_goals: languageGoals, language_logs: languageLogs,
       research_papers: researchPapers, research_ideas: researchIdeas,
-      branding_posts: brandingPosts, mentor_logs: mentorLogs
+      branding_posts: brandingPosts, mentor_logs: mentorLogs,
+      power_devices: powerDevices,
+      electricity_bills: electricityBills
     };
-    logger.success('Export', `Exported all data for version 6`);
+    logger.success('Export', `Exported all data for version 7`);
     return data;
   } catch (error) {
     logger.error('Export', 'Failed to export data', error);
@@ -813,6 +826,9 @@ export async function exportAll() {
 
 export async function importAll(data) {
   logger.info('Import', 'Importing data', { version: data.version, exportedAt: data.exportedAt });
+  if (data.version && data.version < 4) {
+    logger.warn('Import', `Data version ${data.version} is older than current DB version. Some tables may be empty after import.`);
+  }
   try {
     const db = getDB();
     const tables = [db.notes, db.tasks, db.flashcards, db.decks, db.journal, db.projects, db.events];
@@ -832,6 +848,8 @@ export async function importAll(data) {
     if (db.research_ideas) tables.push(db.research_ideas);
     if (db.branding_posts) tables.push(db.branding_posts);
     if (db.mentor_logs) tables.push(db.mentor_logs);
+    if (db.power_devices) tables.push(db.power_devices);
+    if (db.electricity_bills) tables.push(db.electricity_bills);
 
     await db.transaction('rw', tables, async () => {
       if (data.notes) { await db.notes.clear(); await db.notes.bulkAdd(data.notes); logger.info('Import', `Imported ${data.notes.length} notes`); }
@@ -857,6 +875,8 @@ export async function importAll(data) {
       if (db.research_ideas && data.research_ideas) { await db.research_ideas.clear(); await db.research_ideas.bulkAdd(data.research_ideas); logger.info('Import', `Imported ${data.research_ideas.length} research ideas`); }
       if (db.branding_posts && data.branding_posts) { await db.branding_posts.clear(); await db.branding_posts.bulkAdd(data.branding_posts); logger.info('Import', `Imported ${data.branding_posts.length} branding posts`); }
       if (db.mentor_logs && data.mentor_logs) { await db.mentor_logs.clear(); await db.mentor_logs.bulkAdd(data.mentor_logs); logger.info('Import', `Imported ${data.mentor_logs.length} mentor logs`); }
+      if (db.power_devices && data.power_devices) { await db.power_devices.clear(); await db.power_devices.bulkAdd(data.power_devices); logger.info('Import', `Imported ${data.power_devices.length} power devices`); }
+      if (db.electricity_bills && data.electricity_bills) { await db.electricity_bills.clear(); await db.electricity_bills.bulkAdd(data.electricity_bills); logger.info('Import', `Imported ${data.electricity_bills.length} electricity bills`); }
     });
     logger.success('Import', 'All data imported successfully');
   } catch (error) {
@@ -1069,8 +1089,8 @@ export async function getExpenses(filter = {}) {
     const db = getDB();
     let items = await db.expenses.toArray();
     
-    // Sort by date desc
-    items.sort((a, b) => b.date.localeCompare(a.date));
+    // Sort by date desc (guard against null/undefined date)
+    items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     
     if (filter.type) {
       items = items.filter(e => e.type === filter.type);
@@ -1489,7 +1509,7 @@ export async function deleteLanguageLog(id) {
 export async function getLanguageLogs() {
   try {
     const items = await getDB().language_logs.toArray();
-    items.sort((a, b) => b.date.localeCompare(a.date));
+    items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     return items;
   } catch (error) {
     logger.error('Language', 'Failed to fetch language logs', error);
@@ -1621,7 +1641,7 @@ export async function deleteBrandingPost(id) {
 export async function getBrandingPosts() {
   try {
     const items = await getDB().branding_posts.toArray();
-    items.sort((a, b) => b.date.localeCompare(a.date));
+    items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     return items;
   } catch (error) {
     logger.error('Branding', 'Failed to fetch branding posts', error);
@@ -1665,10 +1685,113 @@ export async function deleteMentorLog(id) {
 export async function getMentorLogs() {
   try {
     const items = await getDB().mentor_logs.toArray();
-    items.sort((a, b) => b.date.localeCompare(a.date));
+    items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     return items;
   } catch (error) {
     logger.error('Mentoring', 'Failed to fetch mentor logs', error);
+    throw error;
+  }
+}
+
+/* ── Power Hub (Electricity Management) ── */
+
+export async function createPowerDevice(data) {
+  logger.info('Power', 'Creating power device', { name: data.name });
+  try {
+    const db = getDB();
+    const now = new Date().toISOString();
+    const id = await db.power_devices.add({ ...data, createdAt: now, updatedAt: now });
+    logger.success('Power', `Power device created with id: ${id}`);
+    return id;
+  } catch (error) {
+    logger.error('Power', 'Failed to create power device', error);
+    throw error;
+  }
+}
+
+export async function getPowerDevices() {
+  logger.info('Power', 'Fetching power devices');
+  try {
+    const db = getDB();
+    const devices = await db.power_devices.toArray();
+    logger.success('Power', `Fetched ${devices.length} power devices`);
+    return devices;
+  } catch (error) {
+    logger.error('Power', 'Failed to fetch power devices', error);
+    throw error;
+  }
+}
+
+export async function updatePowerDevice(id, changes) {
+  logger.info('Power', `Updating power device id: ${id}`, changes);
+  try {
+    const result = await getDB().power_devices.update(Number(id), { ...changes, updatedAt: new Date().toISOString() });
+    logger.success('Power', `Power device updated: ${id}`);
+    return result;
+  } catch (error) {
+    logger.error('Power', `Failed to update power device id: ${id}`, error);
+    throw error;
+  }
+}
+
+export async function deletePowerDevice(id) {
+  logger.info('Power', `Deleting power device id: ${id}`);
+  try {
+    await getDB().power_devices.delete(Number(id));
+    logger.success('Power', `Power device deleted: ${id}`);
+  } catch (error) {
+    logger.error('Power', `Failed to delete power device id: ${id}`, error);
+    throw error;
+  }
+}
+
+export async function createElectricityBill(data) {
+  logger.info('Power', 'Creating electricity bill', { month: data.month });
+  try {
+    const db = getDB();
+    const now = new Date().toISOString();
+    const id = await db.electricity_bills.add({ ...data, createdAt: now });
+    logger.success('Power', `Electricity bill created with id: ${id}`);
+    return id;
+  } catch (error) {
+    logger.error('Power', 'Failed to create electricity bill', error);
+    throw error;
+  }
+}
+
+export async function getElectricityBills() {
+  logger.info('Power', 'Fetching electricity bills');
+  try {
+    const db = getDB();
+    const bills = await db.electricity_bills.toArray();
+    bills.sort((a, b) => (b.month || '').localeCompare(a.month || ''));
+    logger.success('Power', `Fetched ${bills.length} electricity bills`);
+    return bills;
+  } catch (error) {
+    logger.error('Power', 'Failed to fetch electricity bills', error);
+    throw error;
+  }
+}
+
+export async function updateElectricityBill(id, changes) {
+  logger.info('Power', `Updating electricity bill id: ${id}`, changes);
+  try {
+    const result = await getDB().electricity_bills.update(Number(id), changes);
+    logger.success('Power', `Electricity bill updated: ${id}`);
+    return result;
+  } catch (error) {
+    logger.error('Power', `Failed to update electricity bill id: ${id}`, error);
+    throw error;
+  }
+}
+
+export async function deleteElectricityBill(id) {
+  logger.info('Power', `Deleting electricity bill id: ${id}`);
+  try {
+    await getDB().electricity_bills.delete(Number(id));
+    logger.success('Power', `Electricity bill deleted: ${id}`);
+  } catch (error) {
+    logger.error('Power', `Failed to delete electricity bill id: ${id}`, error);
     throw error;
   }
 }

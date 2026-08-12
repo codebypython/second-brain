@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../AppContext';
 import {
   getBooks, createBook, updateBook, deleteBook,
@@ -61,6 +61,40 @@ export default function SelfActualizationHub() {
   useEffect(() => {
     calculateFinance();
   }, [financeInput]);
+
+  const isChatLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (profile?.id) {
+      const key = `secondbrain_chat_logs_${profile.id}`;
+      try {
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const formatted = parsed.map(log => ({
+            ...log,
+            timestamp: new Date(log.timestamp)
+          }));
+          setChatLogs(formatted);
+        } else {
+          setChatLogs([
+            { sender: 'ai', text: 'Xin chào! Tôi là AI Cố vấn của bạn. Hãy chọn một câu hỏi gợi ý nhanh hoặc hỏi tôi bất cứ điều gì về lộ trình học tập, tài chính và thói quen cá nhân của bạn.', timestamp: new Date() }
+          ]);
+        }
+      } catch (e) {
+        logger.error(MODULE, 'Failed to load chat logs from localStorage', e);
+      } finally {
+        isChatLoadedRef.current = true;
+      }
+    }
+  }, [profile?.id]);
+
+  useEffect(() => {
+    if (profile?.id && isChatLoadedRef.current) {
+      const key = `secondbrain_chat_logs_${profile.id}`;
+      localStorage.setItem(key, JSON.stringify(chatLogs));
+    }
+  }, [chatLogs, profile?.id]);
 
   async function loadAllData() {
     logger.info(MODULE, 'Loading Self Actualization Data');
@@ -374,6 +408,19 @@ export default function SelfActualizationHub() {
       setAiLoading(false);
     }
   }
+
+  const handleClearChat = () => {
+    if (confirm('Bạn có muốn xóa toàn bộ lịch sử trò chuyện với AI?')) {
+      const defaultGreeting = [
+        { sender: 'ai', text: 'Xin chào! Tôi là AI Cố vấn của bạn. Hãy chọn một câu hỏi gợi ý nhanh hoặc hỏi tôi bất cứ điều gì về lộ trình học tập, tài chính và thói quen cá nhân của bạn.', timestamp: new Date() }
+      ];
+      setChatLogs(defaultGreeting);
+      if (profile?.id) {
+        const key = `secondbrain_chat_logs_${profile.id}`;
+        localStorage.setItem(key, JSON.stringify(defaultGreeting));
+      }
+    }
+  };
 
   async function triggerAIPrompt(type) {
     setAiLoading(true);
@@ -1179,11 +1226,16 @@ Tôi đã ghi nhận câu hỏi của bạn. Do hiện tại bạn đang ở ch�
                 <h3>{t('self.ai.title', { defaultValue: '🤖 AI Cố vấn Học tập & Thói quen' })}</h3>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Powered by Gemini LLM Engine (Client-direct)</span>
               </div>
-              {!profile?.geminiApiKey && (
-                <span style={{ fontSize: '0.75rem', color: 'var(--amber)', background: 'rgba(230,126,34,0.1)', padding: '4px 8px', borderRadius: '4px' }}>
-                  Offline Mode
-                </span>
-              )}
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button className="btn btn-sm btn-danger" onClick={handleClearChat} style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
+                  🗑️ Xóa Chat
+                </button>
+                {!profile?.geminiApiKey && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--amber)', background: 'rgba(230,126,34,0.1)', padding: '4px 8px', borderRadius: '4px' }}>
+                    Offline Mode
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Chat screen */}

@@ -17,6 +17,7 @@ import PomodoroTimer from './pages/PomodoroTimer.jsx';
 import CareerHub from './pages/CareerHub.jsx';
 import NetworkHub from './pages/NetworkHub.jsx';
 import SelfActualizationHub from './pages/SelfActualizationHub.jsx';
+import PowerHub from './pages/PowerHub.jsx';
 
 const PAGES = {
   dashboard: Dashboard,
@@ -29,6 +30,7 @@ const PAGES = {
   settings: Settings,
   courses: Courses,
   expenses: Expenses,
+  power: PowerHub,
   health: Health,
   pomodoro: PomodoroTimer,
   career: CareerHub,
@@ -77,15 +79,17 @@ class ErrorBoundary extends Component {
 }
 
 function AppContent() {
-  const { profile, setProfile, isLoading } = useAppContext();
+  const { profile, setProfile, isLoading, t } = useAppContext();
   const [page, setPage] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
   const [pageParams, setPageParams] = useState({});
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const navigate = useCallback((p, opts = {}) => {
     setPage(p);
     if (opts.search) setSearchQuery(opts.search);
     setPageParams(opts.params || {});
+    setSidebarOpen(false);
   }, []);
 
   if (isLoading) return null;
@@ -97,12 +101,22 @@ function AppContent() {
   const Page = PAGES[page] || Dashboard;
 
   return (
-    <>
+    <div className={`app-container ${sidebarOpen ? 'sidebar-open' : ''}`}>
+      {sidebarOpen && (
+        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+      )}
       <Sidebar activePage={page} onNavigate={navigate} />
+      <div className="mobile-header">
+        <button className="menu-btn" onClick={() => setSidebarOpen(true)}>☰</button>
+        <div className="mobile-title">{t('app.title')}</div>
+        <div className="mobile-header-right">
+          {profile?.avatar || '🧠'}
+        </div>
+      </div>
       <main className="main-content">
         <Page navigate={navigate} searchQuery={searchQuery} setSearchQuery={setSearchQuery} pageParams={pageParams} />
       </main>
-    </>
+    </div>
   );
 }
 

@@ -10,6 +10,7 @@ import {
 } from '../store/db';
 import { useAppContext } from '../AppContext';
 import logger from '../store/logger';
+import { convertScore10ToLetter, convertLetterToScore4, calculateCumulativeGpa } from '../store/gpaUtils';
 
 const MODULE = 'CoursesPage';
 
@@ -37,7 +38,7 @@ const PREREQUISITES = {
 };
 
 export default function Courses({ navigate }) {
-  const { t, lang } = useAppContext();
+  const { t, lang, profile } = useAppContext();
   const [activeTab, setActiveTab] = useState('list');
   const [courses, setCourses] = useState([]);
   const [filterSem, setFilterSem] = useState(0); // 0 = All, 1-8 = Semester
@@ -74,9 +75,10 @@ export default function Courses({ navigate }) {
 
   useEffect(() => {
     loadCourses();
-  }, []);
+  }, [profile?.id]);
 
   async function loadCourses() {
+    if (!profile?.id) return;
     setLoading(true);
     setError(null);
     try {
@@ -86,8 +88,18 @@ export default function Courses({ navigate }) {
       
       // Initialize simulation state
       const sim = {};
+      let persistedSim = {};
+      const key = `secondbrain_simulated_grades_${profile.id}`;
+      try {
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          persistedSim = JSON.parse(stored);
+        }
+      } catch (e) {
+        logger.error(MODULE, 'Failed to parse simulated grades from localStorage', e);
+      }
       data.forEach(c => {
-        sim[c.id] = c.gradeLetter || '';
+        sim[c.id] = persistedSim[c.id] !== undefined ? persistedSim[c.id] : (c.gradeLetter || '');
       });
       setSimulatedGrades(sim);
       logger.success(MODULE, `Loaded ${data.length} courses`);
@@ -98,6 +110,13 @@ export default function Courses({ navigate }) {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (profile?.id && Object.keys(simulatedGrades).length > 0) {
+      const key = `secondbrain_simulated_grades_${profile.id}`;
+      localStorage.setItem(key, JSON.stringify(simulatedGrades));
+    }
+  }, [simulatedGrades, profile?.id]);
 
   function getTodayStr() {
     return new Date().toISOString().slice(0, 10);
@@ -150,14 +169,9 @@ export default function Courses({ navigate }) {
 
   // Convert score10 to letter and 4-scale based on DUT rules
   function mapDUTScore(score10) {
-    if (score10 === null || score10 === undefined || isNaN(score10)) {
-      return { gradeLetter: '', score4: null };
-    }
-    if (score10 >= 8.5) return { gradeLetter: 'A', score4: 4.0 };
-    if (score10 >= 7.0) return { gradeLetter: 'B', score4: 3.0 };
-    if (score10 >= 5.5) return { gradeLetter: 'C', score4: 2.0 };
-    if (score10 >= 4.0) return { gradeLetter: 'D', score4: 1.0 };
-    return { gradeLetter: 'F', score4: 0.0 };
+    const letter = convertScore10ToLetter(score10);
+    const score4 = convertLetterToScore4(letter);
+    return { gradeLetter: letter, score4 };
   }
 
   function handleFormChange(field, val) {
@@ -433,14 +447,7 @@ export default function Courses({ navigate }) {
       }
     });
 
-    let totalWeightedScore = 0;
-    let totalCreditsForGpa = 0;
-    Object.values(activeCourses).forEach(item => {
-      totalWeightedScore += item.score4 * item.credits;
-      totalCreditsForGpa += item.credits;
-    });
-
-    const cumulativeGPA = totalCreditsForGpa > 0 ? totalWeightedScore / totalCreditsForGpa : 0.00;
+    const cumulativeGPA = calculateCumulativeGpa(courseList);
     
     const totalEarnedCredits = courseList
       .filter(c => c.status === 'passed')
@@ -498,13 +505,7 @@ export default function Courses({ navigate }) {
   }
 
   function mapLetterToScore4(letter) {
-    const l = letter.toUpperCase();
-    if (l === 'A') return { score4: 4.0 };
-    if (l === 'B') return { score4: 3.0 };
-    if (l === 'C') return { score4: 2.0 };
-    if (l === 'D') return { score4: 1.0 };
-    if (l === 'F') return { score4: 0.0 };
-    return { score4: null };
+    return { score4: convertLetterToScore4(letter) };
   }
 
   const simulatedStats = getSimulatedGPA();

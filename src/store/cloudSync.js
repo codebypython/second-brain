@@ -61,6 +61,14 @@ export async function importEntireSystem(data) {
   }
 }
 
+export async function getPasscodeHash(passcode) {
+  if (!passcode) return '';
+  const msgUint8 = new TextEncoder().encode(passcode);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 export async function pushToCloud(passcode) {
   logger.info('CloudSync', 'Starting push to cloud');
   if (!passcode || passcode.length < 4) {
@@ -68,6 +76,8 @@ export async function pushToCloud(passcode) {
     logger.error('CloudSync', 'Push failed — invalid passcode', err);
     throw err;
   }
+  
+  const passcodeHash = await getPasscodeHash(passcode);
   
   try {
     const data = await exportEntireSystem();
@@ -82,7 +92,7 @@ export async function pushToCloud(passcode) {
     logger.info('CloudSync', `Data size: ${(jsonStr.length / 1024).toFixed(1)}KB, chunks: ${chunks.length}`);
     
     // Save metadata
-    await setDoc(doc(firestore, "backups", passcode), { 
+    await setDoc(doc(firestore, "backups", passcodeHash), { 
       chunksCount: chunks.length,
       updatedAt: new Date().toISOString() 
     });
@@ -90,7 +100,7 @@ export async function pushToCloud(passcode) {
 
     // Save chunks
     for (let i = 0; i < chunks.length; i++) {
-      await setDoc(doc(firestore, "backups", `${passcode}_chunk_${i}`), { data: chunks[i] });
+      await setDoc(doc(firestore, "backups", `${passcodeHash}_chunk_${i}`), { data: chunks[i] });
       logger.info('CloudSync', `Chunk ${i + 1}/${chunks.length} uploaded`);
     }
     
@@ -109,8 +119,10 @@ export async function pullFromCloud(passcode) {
     throw err;
   }
   
+  const passcodeHash = await getPasscodeHash(passcode);
+
   try {
-    const metaSnap = await getDoc(doc(firestore, "backups", passcode));
+    const metaSnap = await getDoc(doc(firestore, "backups", passcodeHash));
     if (!metaSnap.exists()) {
       const err = new Error("No backup found for this passcode.");
       logger.error('CloudSync', 'Pull failed — no backup found', err);
@@ -122,7 +134,7 @@ export async function pullFromCloud(passcode) {
     
     let jsonStr = '';
     for (let i = 0; i < chunksCount; i++) {
-      const chunkSnap = await getDoc(doc(firestore, "backups", `${passcode}_chunk_${i}`));
+      const chunkSnap = await getDoc(doc(firestore, "backups", `${passcodeHash}_chunk_${i}`));
       if (chunkSnap.exists()) {
         jsonStr += chunkSnap.data().data;
         logger.info('CloudSync', `Chunk ${i + 1}/${chunksCount} downloaded`);

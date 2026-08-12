@@ -10,7 +10,7 @@ const MODULE = 'Settings';
 
 export default function Settings() {
   const { t, profile, setProfile } = useAppContext();
-  const [form, setForm] = useState({ name: '', language: 'vi', timezone: '' });
+  const [form, setForm] = useState({ name: '', language: 'vi', timezone: '', geminiApiKey: '', universityName: '', budgetLimit: 3000000 });
   
   // Cloud sync state
   const [passcode, setPasscode] = useState('');
@@ -19,16 +19,27 @@ export default function Settings() {
 
   useEffect(() => {
     if (profile) {
-      setForm({ name: profile.name, language: profile.language, timezone: profile.timezone, geminiApiKey: profile.geminiApiKey || '' });
+      setForm({
+        name: profile.name,
+        language: profile.language,
+        timezone: profile.timezone,
+        geminiApiKey: profile.geminiApiKey || '',
+        universityName: profile.universityName || 'Đại học Bách Khoa - Đại học Đà Nẵng',
+        budgetLimit: profile.budgetLimit !== undefined ? profile.budgetLimit : 3000000
+      });
     }
   }, [profile]);
 
   async function handleUpdateProfile() {
     if (!form.name.trim()) return;
-    logger.info(MODULE, 'Updating profile', { profileId: profile.id, form });
+    const dataToSave = {
+      ...form,
+      budgetLimit: Number(form.budgetLimit) || 3000000
+    };
+    logger.info(MODULE, 'Updating profile', { profileId: profile.id, form: dataToSave });
     try {
-      await updateProfile(profile.id, form);
-      setProfile({ ...profile, ...form });
+      await updateProfile(profile.id, dataToSave);
+      setProfile({ ...profile, ...dataToSave });
       logger.success(MODULE, 'Profile updated');
       alert(t('settings.saved', { defaultValue: 'Settings saved!' }));
     } catch (err) {
@@ -165,6 +176,14 @@ export default function Settings() {
           <div className="form-group">
             <label className="form-label">Google Gemini API Key</label>
             <input className="input" type="password" placeholder="AIzaSy..." value={form.geminiApiKey || ''} onChange={e => setForm({ ...form, geminiApiKey: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Trường Đào Tạo (CV)</label>
+            <input className="input" value={form.universityName || ''} onChange={e => setForm({ ...form, universityName: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Hạn Mức Chi Tiêu Tháng (đ)</label>
+            <input className="input" type="number" value={form.budgetLimit || 3000000} onChange={e => setForm({ ...form, budgetLimit: e.target.value })} />
           </div>
           <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end', gap: '12px' }}>
             <button className="btn btn-primary" onClick={handleUpdateProfile}>{t('common.save')}</button>

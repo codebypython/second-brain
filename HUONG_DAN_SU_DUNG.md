@@ -174,3 +174,88 @@ Giao diện đỉnh tháp nhu cầu hỗ trợ phát triển toàn diện bản 
    - Vào mục **Sức khỏe** cập nhật lượng nước uống, giờ ngủ tối hôm trước, và bài tập thể thao.
    - Viết vài dòng cảm nghĩ tại mục **Nhật ký** và chọn emoji cảm xúc của ngày.
    - Truy cập **Cài đặt -> Push to Cloud** để đồng bộ và lưu trữ an toàn toàn bộ dữ liệu học tập và cuộc sống lên đám mây.
+
+---
+
+## Phần 5: Hướng Dẫn Triển Khai Lên Vercel Toàn Diện
+
+Hệ thống **Second Brain** của bạn là một ứng dụng Single Page Application (SPA) phát triển trên Vite + React. Ứng dụng chạy hoàn toàn ở phía Client, không cần server nền, giúp bạn có thể dễ dàng triển khai lên dịch vụ Cloud Vercel miễn phí theo 3 phương thức chuyên nghiệp sau:
+
+### 1. Cách 1: Triển khai Kéo-Thả (Vercel Drop - Nhanh nhất)
+Phương thức này phù hợp nhất nếu bạn chỉ muốn deploy nhanh bản build hiện tại mà không cần quản lý mã nguồn Git:
+1. Tại thư mục chứa dự án `second-brain`, chạy lệnh sau để Vite tối ưu hóa và đóng gói ứng dụng:
+   ```powershell
+   npm run build
+   ```
+   *Kết quả:* Một thư mục tên `dist` sẽ được sinh ra ở thư mục gốc của dự án.
+2. Truy cập [vercel.com/new/drop](https://vercel.com/new/drop) (đăng nhập bằng tài khoản Vercel).
+3. Kéo và thả thư mục `dist` từ máy tính của bạn vào vùng tải lên của trang web Vercel.
+4. Chờ trong giây lát, Vercel sẽ cấp cho bạn một đường dẫn công khai dạng `https://ten-du-an.vercel.app` để truy cập ứng dụng trên mọi thiết bị.
+
+### 2. Cách 2: Liên kết GitHub/GitLab (Khuyên dùng - Auto CI/CD)
+Đây là cách triển khai chuẩn công nghiệp, hệ thống sẽ tự động cập nhật (Auto Deploy) mỗi khi bạn chỉnh sửa và đẩy code mới lên GitHub:
+1. **Đẩy mã nguồn lên GitHub:**
+   - Tạo một repository mới trên GitHub (ví dụ đặt tên là `second-brain`).
+   - Đẩy toàn bộ mã nguồn dự án của bạn lên repository đó qua Git:
+     ```bash
+     git init
+     git add .
+     git commit -m "Initial commit"
+     git branch -M main
+     git remote add origin <link-repo-github-cua-ban>
+     git push -u origin main
+     ```
+2. **Liên kết với Vercel:**
+   - Truy cập [vercel.com](https://vercel.com) và chọn **Add New** ➜ **Project**.
+   - Chọn Import repository GitHub của bạn vừa đẩy lên.
+   - Tại phần **Framework Preset**, Vercel sẽ tự động phát hiện dự án sử dụng **Vite**.
+   - Mục **Build Command** mặc định sẽ là `vite build` và **Output Directory** là `dist`. Hãy giữ nguyên cấu hình này.
+   - Bấm nút **Deploy**. Quá trình build sẽ tự động diễn ra và hoàn thành sau khoảng 30 giây.
+
+### 3. Cách 3: Sử dụng Vercel CLI (Dành cho Lập trình viên)
+Nếu bạn thích làm việc trên Terminal mà không cần mở trình duyệt:
+1. Cài đặt Vercel CLI toàn cục trên máy tính:
+   ```powershell
+   npm install -g vercel
+   ```
+2. Đăng nhập tài khoản Vercel bằng CLI:
+   ```powershell
+   vercel login
+   ```
+3. Chạy lệnh sau tại thư mục gốc của dự án và chọn các thiết lập mặc định (Vercel CLI sẽ tự động phát hiện cấu hình Vite):
+   ```powershell
+   vercel
+   ```
+4. Khi muốn phát hành lên môi trường Production thực tế, chạy lệnh:
+   ```powershell
+   vercel --prod
+   ```
+
+---
+
+### ⚙️ Lưu ý Cấu hình Kỹ thuật Quan trọng
+
+#### A. Cấu hình Định tuyến (Routing SPA)
+Khi bạn chuyển trang trong ứng dụng (ví dụ từ Dashboard sang mục Chi tiêu), React Router sẽ thay đổi đường dẫn URL. Nếu người dùng tải lại trang (F5) trực tiếp ở đường dẫn `https://ten-du-an.vercel.app/expenses`, máy chủ Vercel sẽ báo lỗi `404 Not Found` vì không tìm thấy file vật lý `/expenses`.
+*Giải pháp:* Dự án đã cấu hình sẵn file [vercel.json](file:///d:/Development/projects/second-brain/vercel.json) ở thư mục gốc:
+```json
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/assets/(.*)", "destination": "/assets/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+```
+Cấu hình này yêu cầu Vercel chuyển hướng toàn bộ các request không phải asset tĩnh về file `index.html` để React Router xử lý, giúp ngăn chặn triệt để lỗi 404 khi reload trang.
+
+#### B. Thiết lập Biến Môi Trường (Environment Variables)
+Nếu bạn muốn sử dụng tính năng AI Advisor thông minh mà không cần phải nhập Google Gemini API Key thủ công trên thiết bị client:
+1. Truy cập trang Dashboard quản trị dự án trên Vercel.
+2. Vào tab **Settings** ➜ chọn **Environment Variables** từ menu bên trái.
+3. Thêm một biến môi trường mới:
+   * **Key:** `VITE_GEMINI_API_KEY`
+   * **Value:** *(Dán mã API Key lấy từ Google AI Studio của bạn vào đây)*
+4. Bấm **Save**.
+5. Kể từ phiên build tiếp theo, ứng dụng sẽ tự động tích hợp API Key này vào luồng xử lý AI Advisor mà vẫn đảm bảo tính an toàn bảo mật, không lộ khóa API Key trong mã nguồn công khai của bạn.
+
