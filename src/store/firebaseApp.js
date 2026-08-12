@@ -6,7 +6,7 @@ import { getAuth, signInAnonymously } from "firebase/auth";
 const firebaseConfig = {
   apiKey: "AIzaSyDXBd9FHwIpqXXD5sDGwJcgc4Nl7qSTHJU",
   authDomain: "second-brain-app-54a1b.firebaseapp.com",
-  projectId: "second-brain-app-54a1b",
+  projectId: "second-brain-app-kaiser",
   storageBucket: "second-brain-app-54a1b.firebasestorage.app",
   messagingSenderId: "1045562884233",
   appId: "1:1045562884233:web:8c87c610a25dcc68a34658",
@@ -14,7 +14,8 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+// Specify the named database "second-brain-app-54a1b" matching your Firebase Console
+export const db = getFirestore(app, "second-brain-app-54a1b");
 export const storage = getStorage(app);
 export const auth = getAuth(app);
 
