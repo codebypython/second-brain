@@ -47,6 +47,12 @@ export default function Sidebar({ activePage, onNavigate }) {
       { id: 'study', icon: '📚', label: t('nav.study'), badge: stats.dueCards },
       { id: 'journal', icon: '📔', label: t('nav.journal') },
     ]},
+    { section: 'ChillPomodoro Pro', items: [
+      { id: 'chillPomodoro', icon: '🍅', label: 'Pomodoro Pro' },
+      { id: 'chillSchedules', icon: '📅', label: 'Lịch Trình' },
+      { id: 'chillPlanner', icon: '🧠', label: 'Study Planner' },
+      { id: 'chillStats', icon: '📊', label: 'Thống Kê Pro' },
+    ]},
     { section: 'System', items: [
       { id: 'settings', icon: '⚙️', label: t('nav.settings') },
     ]},

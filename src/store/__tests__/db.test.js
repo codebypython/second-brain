@@ -57,6 +57,16 @@ import {
   // Power
   createPowerDevice, getPowerDevices, updatePowerDevice, deletePowerDevice,
   createElectricityBill, getElectricityBills, updateElectricityBill, deleteElectricityBill,
+  // ChillPomodoro
+  createChillAnimation, getChillAnimations, deleteChillAnimation,
+  createChillSound, getChillSounds, deleteChillSound,
+  createChillPreset, getChillPresets, deleteChillPreset,
+  createChillClassSchedule, getChillClassSchedules, deleteChillClassSchedule,
+  createChillDailySchedule, getChillDailySchedules, updateChillDailySchedule, deleteChillDailySchedule,
+  createChillWorkoutProgram, getChillWorkoutPrograms, createChillWorkoutSession, getChillWorkoutSessions, updateChillWorkoutSession,
+  seedChillExercises, getChillExercises,
+  createChillPlannerTask, getChillPlannerTasks, updateChillPlannerTask, deleteChillPlannerTask,
+  saveChillStudyGoal, getChillStudyGoals,
 } from '../db';
 
 const TEST_PROFILE_ID = 'test_user_1';
@@ -545,6 +555,79 @@ describe('Power Hub', () => {
   });
 });
 
+/* ────────────────────────────── ChillPomodoro Tables ────────────────────────────── */
+
+describe('ChillPomodoro Tables', () => {
+  it('Animations CRUD', async () => {
+    const id = await createChillAnimation({ name: 'Rain', type: 'video', mimeType: 'video/mp4', sizeBytes: 1024 });
+    expect((await getChillAnimations()).length).toBe(1);
+    await deleteChillAnimation(id);
+    expect((await getChillAnimations()).length).toBe(0);
+  });
+
+  it('Sounds CRUD', async () => {
+    const id = await createChillSound({ name: 'LoFi Beats', type: 'audio', mimeType: 'audio/mp3', sizeBytes: 2048 });
+    expect((await getChillSounds()).length).toBe(1);
+    await deleteChillSound(id);
+    expect((await getChillSounds()).length).toBe(0);
+  });
+
+  it('Presets CRUD', async () => {
+    const id = await createChillPreset({ name: 'Cozy Study', backgroundId: 1, soundIds: [1, 2] });
+    expect((await getChillPresets()).length).toBe(1);
+    await deleteChillPreset(id);
+    expect((await getChillPresets()).length).toBe(0);
+  });
+
+  it('Class Schedules CRUD', async () => {
+    const id = await createChillClassSchedule({ name: 'HK1 2026', semester: '1', data: [] });
+    expect((await getChillClassSchedules()).length).toBe(1);
+    await deleteChillClassSchedule(id);
+    expect((await getChillClassSchedules()).length).toBe(0);
+  });
+
+  it('Daily Schedules CRUD', async () => {
+    const id = await createChillDailySchedule({ name: 'Routine', weekday: 1, activities: [] });
+    expect((await getChillDailySchedules()).length).toBe(1);
+    await updateChillDailySchedule(id, { name: 'Updated Routine' });
+    expect((await getChillDailySchedules())[0].name).toBe('Updated Routine');
+    await deleteChillDailySchedule(id);
+    expect((await getChillDailySchedules()).length).toBe(0);
+  });
+
+  it('Workout Programs & Sessions', async () => {
+    const progId = await createChillWorkoutProgram({ name: 'Upper Lower', template: 'UpperLower4Day' });
+    expect((await getChillWorkoutPrograms()).length).toBe(1);
+
+    const sessId = await createChillWorkoutSession({ programId: progId, date: '2026-08-12', status: 'pending' });
+    expect((await getChillWorkoutSessions()).length).toBe(1);
+    await updateChillWorkoutSession(sessId, { status: 'completed' });
+    expect((await getChillWorkoutSessions())[0].status).toBe('completed');
+  });
+
+  it('Exercises Seed', async () => {
+    await seedChillExercises([{ name: 'Push-up', muscleGroup: 'Chest', difficulty: 'beginner' }]);
+    expect((await getChillExercises()).length).toBe(1);
+  });
+
+  it('Planner Tasks CRUD', async () => {
+    const id = await createChillPlannerTask({ title: 'Study Calculus', subject: 'Math', duration: 45 });
+    expect((await getChillPlannerTasks()).length).toBe(1);
+    await updateChillPlannerTask(id, { status: 'completed' });
+    expect((await getChillPlannerTasks())[0].status).toBe('completed');
+    await deleteChillPlannerTask(id);
+    expect((await getChillPlannerTasks()).length).toBe(0);
+  });
+
+  it('Study Goals Upsert', async () => {
+    await saveChillStudyGoal({ dailyPomodoros: 4, weeklyMinutes: 600 });
+    await saveChillStudyGoal({ dailyPomodoros: 6, weeklyMinutes: 800 });
+    const goal = await getChillStudyGoals();
+    expect(goal.dailyPomodoros).toBe(6);
+    expect(goal.weeklyMinutes).toBe(800);
+  });
+});
+
 /* ────────────────────────────── Export/Import ────────────────────────────── */
 
 describe('Export/Import', () => {
@@ -564,7 +647,7 @@ describe('Export/Import', () => {
 
     // Export
     const exported = await exportAll();
-    expect(exported.version).toBe(7);
+    expect(exported.version).toBe(8);
     expect(exported.notes.length).toBe(1);
     expect(exported.tasks.length).toBe(1);
     expect(exported.decks.length).toBe(1);

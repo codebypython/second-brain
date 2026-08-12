@@ -128,6 +128,46 @@ export function initDB(profileId) {
     electricity_bills: '++id, month, startIndex, endIndex, totalKwh, totalAmount, paid, note, createdAt'
   });
 
+  db.version(8).stores({
+    notes: '++id, title, category, area, tags, createdAt, updatedAt, pinned, courseId',
+    tasks: '++id, title, status, priority, project, dueDate, createdAt, completedAt, courseId',
+    flashcards: '++id, deckId, front, back, nextReview, interval, ease, repetitions',
+    decks: '++id, name, category, createdAt',
+    journal: '++id, date, mood, content, createdAt',
+    projects: '++id, name, status, color, createdAt',
+    events: '++id, title, date, startTime, endTime, color, category, description, repeat, completed, createdAt',
+    courses: '++id, name, code, credits, type, semester, status, gradeLetter, score10, score4, lecturer, room, schedule, notes, createdAt, updatedAt',
+    expenses: '++id, amount, category, date, description, type, createdAt',
+    health: '++id, date, sleepHours, sleepQuality, weight, bmi, steps, waterIntake, workoutType, workoutDuration, workoutIntensity, notes, createdAt, updatedAt',
+    pomodoro_logs: '++id, courseId, taskId, duration, date, notes',
+    skills: '++id, careerPath, skillName, rating, updatedAt',
+    portfolios: '++id, name, techStack, description, githubUrl, demoUrl, imagePath, createdAt',
+    certificates: '++id, name, issuer, issueDate, credentialId, type, createdAt',
+    networking: '++id, type, name, contact, expertise, notes, createdAt',
+    side_projects: '++id, name, status, description, githubUrl, createdAt',
+    books: '++id, title, author, category, status, rating, createdAt',
+    language_goals: '++id, language, examDate',
+    language_logs: '++id, type, date',
+    research_papers: '++id, title, category, status, createdAt',
+    research_ideas: '++id, title, category, status, createdAt',
+    branding_posts: '++id, title, platform, status, date',
+    mentor_logs: '++id, menteeName, date, createdAt',
+    power_devices: '++id, name, power, quantity, hoursPerDay, daysPerMonth, category, room, createdAt, updatedAt',
+    electricity_bills: '++id, month, startIndex, endIndex, totalKwh, totalAmount, paid, note, createdAt',
+
+    // ChillPomodoro Tables
+    chill_animations: '++id, name, type, mimeType, sizeBytes, createdAt',
+    chill_sounds: '++id, name, type, mimeType, sizeBytes, createdAt',
+    chill_presets: '++id, name, createdAt',
+    chill_class_schedules: '++id, name, semester, createdAt',
+    chill_daily_schedules: '++id, name, weekday, createdAt',
+    chill_workout_programs: '++id, name, template, createdAt',
+    chill_workout_sessions: '++id, programId, date, status, completedAt',
+    chill_exercises: '++id, name, muscleGroup, equipment, difficulty',
+    chill_planner_tasks: '++id, title, subject, deadline, targetDate, priority, status, createdAt',
+    chill_study_goals: '++id, dailyPomodoros, weeklyMinutes, updatedAt'
+  });
+
   currentDb = db;
   logger.success('DB', `Database initialized: SecondBrainDB_${profileId}`);
   return db;
@@ -782,30 +822,31 @@ export async function exportAll() {
   logger.info('Export', 'Exporting all data');
   try {
     const db = getDB();
-    const [notes, tasks, flashcards, decks, journal, projects, events, courses, expenses, health, pomodoroLogs, skills, portfolios, certificates, networking, sideProjects, books, languageGoals, languageLogs, researchPapers, researchIdeas, brandingPosts, mentorLogs, powerDevices, electricityBills] = await Promise.all([
+    const safeArray = (table) => (table ? table.toArray() : Promise.resolve([]));
+    
+    const [
+      notes, tasks, flashcards, decks, journal, projects, events, courses, expenses, health,
+      pomodoroLogs, skills, portfolios, certificates, networking, sideProjects, books,
+      languageGoals, languageLogs, researchPapers, researchIdeas, brandingPosts, mentorLogs,
+      powerDevices, electricityBills,
+      chillAnimations, chillSounds, chillPresets, chillClassSchedules, chillDailySchedules,
+      chillWorkoutPrograms, chillWorkoutSessions, chillExercises, chillPlannerTasks, chillStudyGoals
+    ] = await Promise.all([
       db.notes.toArray(), db.tasks.toArray(), db.flashcards.toArray(),
       db.decks.toArray(), db.journal.toArray(), db.projects.toArray(), db.events.toArray(),
-      db.courses ? db.courses.toArray() : Promise.resolve([]),
-      db.expenses ? db.expenses.toArray() : Promise.resolve([]),
-      db.health ? db.health.toArray() : Promise.resolve([]),
-      db.pomodoro_logs ? db.pomodoro_logs.toArray() : Promise.resolve([]),
-      db.skills ? db.skills.toArray() : Promise.resolve([]),
-      db.portfolios ? db.portfolios.toArray() : Promise.resolve([]),
-      db.certificates ? db.certificates.toArray() : Promise.resolve([]),
-      db.networking ? db.networking.toArray() : Promise.resolve([]),
-      db.side_projects ? db.side_projects.toArray() : Promise.resolve([]),
-      db.books ? db.books.toArray() : Promise.resolve([]),
-      db.language_goals ? db.language_goals.toArray() : Promise.resolve([]),
-      db.language_logs ? db.language_logs.toArray() : Promise.resolve([]),
-      db.research_papers ? db.research_papers.toArray() : Promise.resolve([]),
-      db.research_ideas ? db.research_ideas.toArray() : Promise.resolve([]),
-      db.branding_posts ? db.branding_posts.toArray() : Promise.resolve([]),
-      db.mentor_logs ? db.mentor_logs.toArray() : Promise.resolve([]),
-      db.power_devices ? db.power_devices.toArray() : Promise.resolve([]),
-      db.electricity_bills ? db.electricity_bills.toArray() : Promise.resolve([]),
+      safeArray(db.courses), safeArray(db.expenses), safeArray(db.health), safeArray(db.pomodoro_logs),
+      safeArray(db.skills), safeArray(db.portfolios), safeArray(db.certificates), safeArray(db.networking),
+      safeArray(db.side_projects), safeArray(db.books), safeArray(db.language_goals), safeArray(db.language_logs),
+      safeArray(db.research_papers), safeArray(db.research_ideas), safeArray(db.branding_posts),
+      safeArray(db.mentor_logs), safeArray(db.power_devices), safeArray(db.electricity_bills),
+      safeArray(db.chill_animations), safeArray(db.chill_sounds), safeArray(db.chill_presets),
+      safeArray(db.chill_class_schedules), safeArray(db.chill_daily_schedules),
+      safeArray(db.chill_workout_programs), safeArray(db.chill_workout_sessions),
+      safeArray(db.chill_exercises), safeArray(db.chill_planner_tasks), safeArray(db.chill_study_goals)
     ]);
+
     const data = { 
-      version: 7, 
+      version: 8, 
       exportedAt: new Date().toISOString(), 
       notes, tasks, flashcards, decks, journal, projects, events, courses, expenses, health, 
       pomodoro_logs: pomodoroLogs,
@@ -814,9 +855,19 @@ export async function exportAll() {
       research_papers: researchPapers, research_ideas: researchIdeas,
       branding_posts: brandingPosts, mentor_logs: mentorLogs,
       power_devices: powerDevices,
-      electricity_bills: electricityBills
+      electricity_bills: electricityBills,
+      chill_animations: chillAnimations,
+      chill_sounds: chillSounds,
+      chill_presets: chillPresets,
+      chill_class_schedules: chillClassSchedules,
+      chill_daily_schedules: chillDailySchedules,
+      chill_workout_programs: chillWorkoutPrograms,
+      chill_workout_sessions: chillWorkoutSessions,
+      chill_exercises: chillExercises,
+      chill_planner_tasks: chillPlannerTasks,
+      chill_study_goals: chillStudyGoals
     };
-    logger.success('Export', `Exported all data for version 7`);
+    logger.success('Export', `Exported all data for version 8`);
     return data;
   } catch (error) {
     logger.error('Export', 'Failed to export data', error);
@@ -831,56 +882,55 @@ export async function importAll(data) {
   }
   try {
     const db = getDB();
-    const tables = [db.notes, db.tasks, db.flashcards, db.decks, db.journal, db.projects, db.events];
-    if (db.courses) tables.push(db.courses);
-    if (db.expenses) tables.push(db.expenses);
-    if (db.health) tables.push(db.health);
-    if (db.pomodoro_logs) tables.push(db.pomodoro_logs);
-    if (db.skills) tables.push(db.skills);
-    if (db.portfolios) tables.push(db.portfolios);
-    if (db.certificates) tables.push(db.certificates);
-    if (db.networking) tables.push(db.networking);
-    if (db.side_projects) tables.push(db.side_projects);
-    if (db.books) tables.push(db.books);
-    if (db.language_goals) tables.push(db.language_goals);
-    if (db.language_logs) tables.push(db.language_logs);
-    if (db.research_papers) tables.push(db.research_papers);
-    if (db.research_ideas) tables.push(db.research_ideas);
-    if (db.branding_posts) tables.push(db.branding_posts);
-    if (db.mentor_logs) tables.push(db.mentor_logs);
-    if (db.power_devices) tables.push(db.power_devices);
-    if (db.electricity_bills) tables.push(db.electricity_bills);
+    const tables = [
+      { t: db.notes, data: data.notes },
+      { t: db.tasks, data: data.tasks },
+      { t: db.flashcards, data: data.flashcards },
+      { t: db.decks, data: data.decks },
+      { t: db.journal, data: data.journal },
+      { t: db.projects, data: data.projects },
+      { t: db.events, data: data.events },
+      { t: db.courses, data: data.courses },
+      { t: db.expenses, data: data.expenses },
+      { t: db.health, data: data.health },
+      { t: db.pomodoro_logs, data: data.pomodoro_logs },
+      { t: db.skills, data: data.skills },
+      { t: db.portfolios, data: data.portfolios },
+      { t: db.certificates, data: data.certificates },
+      { t: db.networking, data: data.networking },
+      { t: db.side_projects, data: data.side_projects },
+      { t: db.books, data: data.books },
+      { t: db.language_goals, data: data.language_goals },
+      { t: db.language_logs, data: data.language_logs },
+      { t: db.research_papers, data: data.research_papers },
+      { t: db.research_ideas, data: data.research_ideas },
+      { t: db.branding_posts, data: data.branding_posts },
+      { t: db.mentor_logs, data: data.mentor_logs },
+      { t: db.power_devices, data: data.power_devices },
+      { t: db.electricity_bills, data: data.electricity_bills },
+      { t: db.chill_animations, data: data.chill_animations },
+      { t: db.chill_sounds, data: data.chill_sounds },
+      { t: db.chill_presets, data: data.chill_presets },
+      { t: db.chill_class_schedules, data: data.chill_class_schedules },
+      { t: db.chill_daily_schedules, data: data.chill_daily_schedules },
+      { t: db.chill_workout_programs, data: data.chill_workout_programs },
+      { t: db.chill_workout_sessions, data: data.chill_workout_sessions },
+      { t: db.chill_exercises, data: data.chill_exercises },
+      { t: db.chill_planner_tasks, data: data.chill_planner_tasks },
+      { t: db.chill_study_goals, data: data.chill_study_goals },
+    ];
 
-    await db.transaction('rw', tables, async () => {
-      if (data.notes) { await db.notes.clear(); await db.notes.bulkAdd(data.notes); logger.info('Import', `Imported ${data.notes.length} notes`); }
-      if (data.tasks) { await db.tasks.clear(); await db.tasks.bulkAdd(data.tasks); logger.info('Import', `Imported ${data.tasks.length} tasks`); }
-      if (data.flashcards) { await db.flashcards.clear(); await db.flashcards.bulkAdd(data.flashcards); logger.info('Import', `Imported ${data.flashcards.length} flashcards`); }
-      if (data.decks) { await db.decks.clear(); await db.decks.bulkAdd(data.decks); logger.info('Import', `Imported ${data.decks.length} decks`); }
-      if (data.journal) { await db.journal.clear(); await db.journal.bulkAdd(data.journal); logger.info('Import', `Imported ${data.journal.length} journals`); }
-      if (data.projects) { await db.projects.clear(); await db.projects.bulkAdd(data.projects); logger.info('Import', `Imported ${data.projects.length} projects`); }
-      if (data.events) { await db.events.clear(); await db.events.bulkAdd(data.events); logger.info('Import', `Imported ${data.events.length} events`); }
-      if (db.courses && data.courses) { await db.courses.clear(); await db.courses.bulkAdd(data.courses); logger.info('Import', `Imported ${data.courses.length} courses`); }
-      if (db.expenses && data.expenses) { await db.expenses.clear(); await db.expenses.bulkAdd(data.expenses); logger.info('Import', `Imported ${data.expenses.length} expenses`); }
-      if (db.health && data.health) { await db.health.clear(); await db.health.bulkAdd(data.health); logger.info('Import', `Imported ${data.health.length} health records`); }
-      if (db.pomodoro_logs && data.pomodoro_logs) { await db.pomodoro_logs.clear(); await db.pomodoro_logs.bulkAdd(data.pomodoro_logs); logger.info('Import', `Imported ${data.pomodoro_logs.length} pomodoro logs`); }
-      if (db.skills && data.skills) { await db.skills.clear(); await db.skills.bulkAdd(data.skills); logger.info('Import', `Imported ${data.skills.length} skills`); }
-      if (db.portfolios && data.portfolios) { await db.portfolios.clear(); await db.portfolios.bulkAdd(data.portfolios); logger.info('Import', `Imported ${data.portfolios.length} portfolios`); }
-      if (db.certificates && data.certificates) { await db.certificates.clear(); await db.certificates.bulkAdd(data.certificates); logger.info('Import', `Imported ${data.certificates.length} certificates`); }
-      if (db.networking && data.networking) { await db.networking.clear(); await db.networking.bulkAdd(data.networking); logger.info('Import', `Imported ${data.networking.length} networking contacts`); }
-      if (db.side_projects && data.side_projects) { await db.side_projects.clear(); await db.side_projects.bulkAdd(data.side_projects); logger.info('Import', `Imported ${data.side_projects.length} side projects`); }
-      if (db.books && data.books) { await db.books.clear(); await db.books.bulkAdd(data.books); logger.info('Import', `Imported ${data.books.length} books`); }
-      if (db.language_goals && data.language_goals) { await db.language_goals.clear(); await db.language_goals.bulkAdd(data.language_goals); logger.info('Import', `Imported ${data.language_goals.length} language goals`); }
-      if (db.language_logs && data.language_logs) { await db.language_logs.clear(); await db.language_logs.bulkAdd(data.language_logs); logger.info('Import', `Imported ${data.language_logs.length} language logs`); }
-      if (db.research_papers && data.research_papers) { await db.research_papers.clear(); await db.research_papers.bulkAdd(data.research_papers); logger.info('Import', `Imported ${data.research_papers.length} research papers`); }
-      if (db.research_ideas && data.research_ideas) { await db.research_ideas.clear(); await db.research_ideas.bulkAdd(data.research_ideas); logger.info('Import', `Imported ${data.research_ideas.length} research ideas`); }
-      if (db.branding_posts && data.branding_posts) { await db.branding_posts.clear(); await db.branding_posts.bulkAdd(data.branding_posts); logger.info('Import', `Imported ${data.branding_posts.length} branding posts`); }
-      if (db.mentor_logs && data.mentor_logs) { await db.mentor_logs.clear(); await db.mentor_logs.bulkAdd(data.mentor_logs); logger.info('Import', `Imported ${data.mentor_logs.length} mentor logs`); }
-      if (db.power_devices && data.power_devices) { await db.power_devices.clear(); await db.power_devices.bulkAdd(data.power_devices); logger.info('Import', `Imported ${data.power_devices.length} power devices`); }
-      if (db.electricity_bills && data.electricity_bills) { await db.electricity_bills.clear(); await db.electricity_bills.bulkAdd(data.electricity_bills); logger.info('Import', `Imported ${data.electricity_bills.length} electricity bills`); }
-    });
+    for (const item of tables) {
+      if (item.t && Array.isArray(item.data)) {
+        await item.t.clear();
+        if (item.data.length > 0) {
+          await item.t.bulkAdd(item.data);
+        }
+      }
+    }
     logger.success('Import', 'All data imported successfully');
   } catch (error) {
-    logger.error('Import', 'Failed to import data — transaction rolled back', error);
+    logger.error('Import', 'Failed to import data', error);
     throw error;
   }
 }
@@ -1794,4 +1844,150 @@ export async function deleteElectricityBill(id) {
     logger.error('Power', `Failed to delete electricity bill id: ${id}`, error);
     throw error;
   }
+}
+
+/* ────────────────────────── ChillPomodoro Storage Functions ────────────────────────── */
+
+/* Animations */
+export async function createChillAnimation(data) {
+  const db = getDB();
+  return await db.chill_animations.add({ ...data, createdAt: new Date().toISOString() });
+}
+export async function getChillAnimations() {
+  const db = getDB();
+  return await db.chill_animations.toArray();
+}
+export async function deleteChillAnimation(id) {
+  const db = getDB();
+  return await db.chill_animations.delete(Number(id));
+}
+
+/* Sounds */
+export async function createChillSound(data) {
+  const db = getDB();
+  return await db.chill_sounds.add({ ...data, createdAt: new Date().toISOString() });
+}
+export async function getChillSounds() {
+  const db = getDB();
+  return await db.chill_sounds.toArray();
+}
+export async function deleteChillSound(id) {
+  const db = getDB();
+  return await db.chill_sounds.delete(Number(id));
+}
+
+/* Presets */
+export async function createChillPreset(data) {
+  const db = getDB();
+  return await db.chill_presets.add({ ...data, createdAt: new Date().toISOString() });
+}
+export async function getChillPresets() {
+  const db = getDB();
+  return await db.chill_presets.toArray();
+}
+export async function deleteChillPreset(id) {
+  const db = getDB();
+  return await db.chill_presets.delete(Number(id));
+}
+
+/* Class Schedules (Excel) */
+export async function createChillClassSchedule(data) {
+  const db = getDB();
+  return await db.chill_class_schedules.add({ ...data, createdAt: new Date().toISOString() });
+}
+export async function getChillClassSchedules() {
+  const db = getDB();
+  return await db.chill_class_schedules.toArray();
+}
+export async function deleteChillClassSchedule(id) {
+  const db = getDB();
+  return await db.chill_class_schedules.delete(Number(id));
+}
+
+/* Daily Schedules */
+export async function createChillDailySchedule(data) {
+  const db = getDB();
+  return await db.chill_daily_schedules.add({ ...data, createdAt: new Date().toISOString() });
+}
+export async function getChillDailySchedules() {
+  const db = getDB();
+  return await db.chill_daily_schedules.toArray();
+}
+export async function updateChillDailySchedule(id, changes) {
+  const db = getDB();
+  return await db.chill_daily_schedules.update(Number(id), changes);
+}
+export async function deleteChillDailySchedule(id) {
+  const db = getDB();
+  return await db.chill_daily_schedules.delete(Number(id));
+}
+
+/* Workout Programs & Sessions */
+export async function createChillWorkoutProgram(data) {
+  const db = getDB();
+  return await db.chill_workout_programs.add({ ...data, createdAt: new Date().toISOString() });
+}
+export async function getChillWorkoutPrograms() {
+  const db = getDB();
+  return await db.chill_workout_programs.toArray();
+}
+export async function createChillWorkoutSession(data) {
+  const db = getDB();
+  return await db.chill_workout_sessions.add({ ...data, createdAt: new Date().toISOString() });
+}
+export async function getChillWorkoutSessions() {
+  const db = getDB();
+  return await db.chill_workout_sessions.toArray();
+}
+export async function updateChillWorkoutSession(id, changes) {
+  const db = getDB();
+  return await db.chill_workout_sessions.update(Number(id), changes);
+}
+
+/* Exercises */
+export async function seedChillExercises(exercises) {
+  const db = getDB();
+  const existing = await db.chill_exercises.count();
+  if (existing === 0 && Array.isArray(exercises)) {
+    await db.chill_exercises.bulkAdd(exercises);
+  }
+}
+export async function getChillExercises() {
+  const db = getDB();
+  return await db.chill_exercises.toArray();
+}
+
+/* Planner Tasks */
+export async function createChillPlannerTask(data) {
+  const db = getDB();
+  return await db.chill_planner_tasks.add({ ...data, status: 'pending', completedPomodoros: 0, createdAt: new Date().toISOString() });
+}
+export async function getChillPlannerTasks() {
+  const db = getDB();
+  return await db.chill_planner_tasks.toArray();
+}
+export async function updateChillPlannerTask(id, changes) {
+  const db = getDB();
+  return await db.chill_planner_tasks.update(Number(id), changes);
+}
+export async function deleteChillPlannerTask(id) {
+  const db = getDB();
+  return await db.chill_planner_tasks.delete(Number(id));
+}
+
+/* Study Goals */
+export async function saveChillStudyGoal(data) {
+  const db = getDB();
+  const existing = await db.chill_study_goals.toCollection().first();
+  const now = new Date().toISOString();
+  if (existing) {
+    await db.chill_study_goals.update(existing.id, { ...data, updatedAt: now });
+    return existing.id;
+  } else {
+    return await db.chill_study_goals.add({ ...data, updatedAt: now });
+  }
+}
+export async function getChillStudyGoals() {
+  const db = getDB();
+  return await db.chill_study_goals.toCollection().first();
 }

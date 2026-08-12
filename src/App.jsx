@@ -18,6 +18,10 @@ import CareerHub from './pages/CareerHub.jsx';
 import NetworkHub from './pages/NetworkHub.jsx';
 import SelfActualizationHub from './pages/SelfActualizationHub.jsx';
 import PowerHub from './pages/PowerHub.jsx';
+import ChillPomodoro from './pages/ChillPomodoro.jsx';
+import ChillSchedules from './pages/ChillSchedules.jsx';
+import ChillPlanner from './pages/ChillPlanner.jsx';
+import ChillStats from './pages/ChillStats.jsx';
 
 const PAGES = {
   dashboard: Dashboard,
@@ -36,6 +40,10 @@ const PAGES = {
   career: CareerHub,
   network: NetworkHub,
   selfActualization: SelfActualizationHub,
+  chillPomodoro: ChillPomodoro,
+  chillSchedules: ChillSchedules,
+  chillPlanner: ChillPlanner,
+  chillStats: ChillStats,
 };
 
 /** Error Boundary — catches unhandled render errors and shows recovery UI */
