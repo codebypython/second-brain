@@ -1,4 +1,4 @@
-import { storage } from './firebaseApp';
+import { storage, ensureFirebaseAuth } from './firebaseApp';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 import { getChillAnimations, getChillSounds, createChillAnimation, createChillSound } from './db';
 import { getPasscodeHash } from './cloudSync';
@@ -6,6 +6,7 @@ import logger from './logger';
 
 export async function uploadMediaToCloud(passcode, onProgress) {
   logger.info('MediaSync', 'Starting media upload to cloud');
+  await ensureFirebaseAuth();
   const passcodeHash = await getPasscodeHash(passcode);
   if (!passcodeHash) throw new Error('Passcode required for media upload');
 
@@ -54,6 +55,7 @@ export async function uploadMediaToCloud(passcode, onProgress) {
 
 export async function downloadMediaFromCloud(passcode, onProgress) {
   logger.info('MediaSync', 'Starting media download from cloud');
+  await ensureFirebaseAuth();
   const passcodeHash = await getPasscodeHash(passcode);
   if (!passcodeHash) throw new Error('Passcode required for media download');
 

@@ -52,6 +52,18 @@ export default function Settings() {
     }
   }
 
+  const formatSyncError = (err) => {
+    const msg = err?.message || String(err);
+    if (msg.includes('Missing or insufficient permissions')) {
+      return {
+        type: 'error',
+        isPermissionError: true,
+        msg: '⚠️ Quyền truy cập Cloud bị khóa (Missing permissions). Vui lòng vào Firebase Console ➔ Firestore Rules ➔ đặt rules "allow read, write: if true;" hoặc sử dụng nút "Xuất File .ZIP (Offline)" dưới đây để sao lưu 100% dữ liệu ngay lập tức!'
+      };
+    }
+    return { type: 'error', msg };
+  };
+
   /* ── Quick Sync (Text Data via Firestore) ── */
   async function handleQuickSync() {
     if (!passcode) {
@@ -64,7 +76,7 @@ export default function Settings() {
       await pushToCloud(passcode);
       setSyncStatus({ type: 'success', msg: '⚡ Quick Sync (Text Data) thành công trong 3 giây!' });
     } catch (err) {
-      setSyncStatus({ type: 'error', msg: err.message });
+      setSyncStatus(formatSyncError(err));
     } finally {
       setSyncing(false);
     }
@@ -93,7 +105,7 @@ export default function Settings() {
 
       setSyncStatus({ type: 'success', msg: '📦 Full Backup (Text + Media) thành công!' });
     } catch (err) {
-      setSyncStatus({ type: 'error', msg: err.message });
+      setSyncStatus(formatSyncError(err));
     } finally {
       setSyncing(false);
     }
@@ -122,7 +134,7 @@ export default function Settings() {
       setSyncStatus({ type: 'success', msg: '✓ Khôi phục thành công! Đang tải lại...' });
       setTimeout(() => window.location.reload(), 1500);
     } catch (err) {
-      setSyncStatus({ type: 'error', msg: err.message });
+      setSyncStatus(formatSyncError(err));
       setSyncing(false);
     }
   }
@@ -269,8 +281,16 @@ export default function Settings() {
         )}
 
         {syncStatus.msg && (
-          <div style={{ padding: '12px', borderRadius: 'var(--radius-sm)', background: syncStatus.type === 'success' ? 'var(--green-glow)' : 'var(--red-glow)', color: syncStatus.type === 'success' ? 'var(--green)' : 'var(--red)', fontSize: '0.9rem' }}>
-            {syncStatus.msg}
+          <div style={{ padding: '12px 16px', borderRadius: 'var(--radius-sm)', background: syncStatus.type === 'success' ? 'var(--green-glow)' : 'var(--red-glow)', color: syncStatus.type === 'success' ? 'var(--green)' : 'var(--red)', fontSize: '0.9rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div>{syncStatus.msg}</div>
+            {syncStatus.isPermissionError && (
+              <button
+                onClick={handleExportZip}
+                style={{ alignSelf: 'flex-start', padding: '8px 16px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--green)', color: '#000', fontWeight: 700, cursor: 'pointer' }}
+              >
+                💾 Xuất File .ZIP Ngay (Offline Backup 100%)
+              </button>
+            )}
           </div>
         )}
 

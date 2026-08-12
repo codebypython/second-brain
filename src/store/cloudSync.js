@@ -1,6 +1,6 @@
 import { masterDb } from './masterDb';
 import { exportAll, importAll, initDB, getCurrentDbName } from './db';
-import { db as firestore } from './firebaseApp';
+import { db as firestore, ensureFirebaseAuth } from './firebaseApp';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import logger from './logger';
 
@@ -77,6 +77,7 @@ export async function pushToCloud(passcode) {
     throw err;
   }
   
+  await ensureFirebaseAuth();
   const passcodeHash = await getPasscodeHash(passcode);
   
   try {
@@ -119,6 +120,7 @@ export async function pullFromCloud(passcode) {
     throw err;
   }
   
+  await ensureFirebaseAuth();
   const passcodeHash = await getPasscodeHash(passcode);
 
   try {
